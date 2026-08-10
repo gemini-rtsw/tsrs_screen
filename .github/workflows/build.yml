@@ -64,17 +64,21 @@ jobs:
             -e EPICS_CA_AUTO_ADDR_LIST=NO \
             tsrs-web:ci
 
-      - name: Wait for channels to connect
+      - name: Wait for steady state
         run: |
-          for i in $(seq 1 60); do
-            n=$(curl -sf localhost:8080/api/healthz \
-                | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_connected"])' \
-                2>/dev/null || echo 0)
-            echo "t+${i}s connected=$n"
-            [ "$n" -gt 0 ] && exit 0
+          # Wait for every channel to be connected AND carrying a value, not
+          # merely for the first connection: pyepics reports connected before
+          # the first monitor update, so asserting values too early is a race.
+          for i in $(seq 1 90); do
+            read n v t <<<"$(curl -sf localhost:8080/api/healthz \
+              | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["ca_connected"],d["ca_with_values"],d["ca_total"])' \
+              2>/dev/null || echo '0 0 0')"
+            echo "t+${i}s connected=$n with_values=$v total=$t"
+            [ "$n" = "76" ] && [ "$v" = "76" ] && exit 0
             sleep 1
           done
-          echo "::error::no channels connected"; docker logs tsrs-web; exit 1
+          echo "::error::did not reach steady state (connected=$n with_values=$v)"
+          docker logs tsrs-web; exit 1
 
       - name: Assert full channel set and real values
         run: |
@@ -115,7 +119,9 @@ jobs:
           for i in $(seq 1 60); do
             n=$(curl -sf localhost:8080/api/healthz \
                 | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_connected"])')
-            [ "$n" = "76" ] && { echo "reconnected at t+${i}s"; exit 0; }
+            v=$(curl -sf localhost:8080/api/healthz \
+                | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_with_values"])')
+            [ "$n" = "76" ] && [ "$v" = "76" ] && { echo "reconnected at t+${i}s"; exit 0; }
             sleep 1
           done
           echo "::error::did not reconnect"; docker logs tsrs-web; exit 1

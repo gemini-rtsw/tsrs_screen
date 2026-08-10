@@ -76,6 +76,14 @@ class Monitor:
 
     The two are kept behind this one class deliberately: nothing outside
     Monitor knows which client is in use.
+
+    CONNECTED DOES NOT IMPLY A VALUE. pyepics fires its connection callback
+    before the first monitor update, so a channel reports connected=True with
+    value=None for a short window after connecting or reconnecting. caproto
+    reaches connected only via a value callback, so it does not show that
+    window. Consumers must therefore treat "has data" as
+    (connected and value is not None) -- which is what the panel does, showing
+    NO DATA rather than guessing. Do not assume the two are equivalent.
     """
 
     def __init__(self, names, heartbeat_pv=None, heartbeat_timeout=5.0,
@@ -330,9 +338,15 @@ def healthz():
     s = monitor.snapshot()
     hb = s.heartbeat.model_dump() if hasattr(s.heartbeat, "model_dump") \
         else s.heartbeat.dict()
+    with_values = sum(1 for r in s.channels.values()
+                      if r.connected and r.value is not None)
     return {"ok": True, "backend": monitor.backend,
             "ca_connected": s.connected, "ca_total": s.total,
-            "ca_ok": s.connected == s.total,
+            "ca_with_values": with_values,
+            # Steady state: every channel connected AND carrying a value.
+            # These differ transiently -- see the note in Monitor about the
+            # connect-before-first-update window.
+            "ca_ok": s.connected == s.total and with_values == s.total,
             "ca_rebuilds": monitor.rebuilds, "heartbeat": hb}
 
 
