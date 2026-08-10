@@ -1,0 +1,7 @@
+fastapi==0.115.6
+uvicorn==0.34.0
+pydantic==2.10.4
+pyepics==3.5.7
+# Dev/CI-only CA client backend (TSRS_CA_BACKEND=caproto). Pure Python, needed
+# on arm64 where pyepics' bundled x86-64 libca cannot load. Not for production.
+caproto==1.1.1

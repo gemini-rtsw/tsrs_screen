@@ -1,0 +1,83 @@
+screen,order,kind,pv,plc_bit,label,links_to,design_description,review,source
+az,0,summary,bfo:azStatus,B3/265,AZ: Detailed Conditions for Transfer,,,,as-built
+az,1,condition,bfo:cond4bits.B5,B3/117,2T jib crane in park position,,2T Jib crane in park position,,as-built
+az,2,condition,bfo:cond4bits.B0,B3/112,Telescope AZ overtravel limits OK,,Telescope AZ overtravel limits OK,,as-built
+az,3,condition,bfo:cond4bits.B2,B3/114,"M1 Cell Lights Off, Terex & 50T cranes parked, handcranks not engaged",,M1 cell light OFF & Terex And 50T crane parked and handcranks not engaged,,as-built
+az,4,condition,bfo:cond4bits.B6,B3/118,Telescope Maintenance Brackets in Observing position,,Telescope Obs/Maint brackets in Observing position,,as-built
+az,5,condition,bfo:cond4bits.B3,B3/115,Telescope AZ Wrap limints OK,,Telescope AZ Wrap limits OK,,as-built
+overview,0,summary,bfo:mcsStatus,B3/256,MCS:,mcs_detail,,,as-built
+overview,1,summary,bfo:pinStatus,B3/261,Locking Pins:,pin_detail,,,as-built
+overview,2,summary,bfo:azStatus,B3/265,Az Faults:,az_detail,,,as-built
+overview,3,summary,bfo:elStatus,B3/266,El Faults:,el_detail,,,as-built
+overview,4,summary,bfo:crcsStatus,B3/257,CRCS:,crcs_detail,,,as-built
+overview,5,summary,bfo:icStatus,B3/263,Instr Cover:,ic_detail,,,as-built
+overview,6,summary,bfo:ecsStatus,B3/258,ECS:,ecs_detail,,,as-built
+overview,7,summary,bfo:mcStatus,B3/260,M1 Cover:,mc_detail,,,as-built
+overview,8,summary,bfo:lotoStatus,B3/264,LOTO:,loto_detail,,,as-built
+overview,9,summary,bfo:hbsStatus,B3/259,HBS:,hbs_detail,,,as-built
+overview,10,summary,bfo:emoStatus,B3/268,E-Stop:,emo_detail,,,as-built
+crcs,0,summary,bfo:crcsStatus,B3/257,CRCS: Detailed Conditions for Transfer,,,,as-built
+crcs,1,condition,bfo:cond3bits.B6,B3/102,Rotator Auto mode Init step,,CRCS Rotator Auto mode Init step,,as-built
+crcs,2,condition,bfo:cond4bits.BC,B3/124,Rotator CW EOT no fault,,CRCS Rotator CW EOT no fault,,as-built
+crcs,3,condition,bfo:cond3bits.B7,B3/103,Wrap Auto mode Init step,,CRCS Wrap Auto mode Init step,,as-built
+crcs,4,condition,bfo:cond4bits.BD,B3/125,Rotator CCW EOT no fault,,CRCS Rotator CCW EOT no fault,,as-built
+crcs,5,condition,bfo:cond3bits.B8,B3/104,Rotator/Wrap Manual mode Init step,,CRCS Rotator/Wrap Manual mode Init step,,as-built
+crcs,6,condition,bfo:cond4bits.BE,B3/126,Wrap Servo Drives no fault,,CRCS Wrap Servo drives no fault,,as-built
+crcs,7,condition,bfo:cond4bits.B9,B3/121,PMAC no fault,,CRCS PMAC no fault,,as-built
+crcs,8,condition,bfo:cond4bits.BF,B3/127,Wrap DC bus no fault,,CRCS Wrap DC busno fault,,as-built
+crcs,9,condition,bfo:cond4bits.BA,B3/122,Rotator Servo Drives no fault,,CRCS Rotator Servo drives no fault,,as-built
+crcs,10,condition,bfo:cond5bits.B0,B3/128,Wrap CW EOT no fault,,CRCS Wrap CW EOT no fault,,as-built
+crcs,11,condition,bfo:cond4bits.BB,B3/123,Rotator DC bus no fault,,CRCS Rotator DC busno fault,,as-built
+crcs,12,condition,bfo:cond5bits.B1,B3/129,Wrap CCW EOT no fault,,CRCS Wrap CCW EOT no fault,,as-built
+ecs,0,summary,bfo:ecsStatus,B3/258,ECS: Detailed Conditions for Transfer,,,,as-built
+ecs,1,condition,bfo:cond1bits.B0,B3/64,Top Shutter Power seq Init step,,Top shutter Power seq Init step,,as-built
+ecs,2,condition,bfo:cond2bits.B0,B3/80,East Vent Gate Closed,,East VGate closed I:31/03,,as-built
+ecs,3,condition,bfo:cond1bits.B1,B3/65,Bottom Shutter Power seq Init step,,Bottom shutter Power seq Init step,,as-built
+ecs,4,condition,bfo:cond2bits.B1,B3/81,West Vent Gate Closed,,West VGate closed I:31/02,,as-built
+ecs,5,condition,bfo:cond1bits.B2,B3/66,Dome Power seq Init step,,Dome Power seq Init step,,as-built
+ecs,6,condition,bfo:cond2bits.B3,B3/83,ECS in Computer Mode,,ECS in computer mode B3/10,,as-built
+ecs,7,condition,bfo:cond1bits.B3,B3/67,Ease VGate Power seq Init step,,East VGate Power seq Init step,,as-built
+ecs,8,condition,bfo:cond2bits.B4,B3/84,Top Shutter UP Overtravel Limit,,Top shutter UP overtravel limit I:30/15,,as-built
+ecs,9,condition,bfo:cond1bits.B4,B3/68,West VGate Power seq Init step,,West VGate Power seq Init step,,as-built
+ecs,10,condition,bfo:cond2bits.B5,B3/85,Top Shutter Down Overtravel Limit,,Top shutter DOWN overtravel limit I:30/05,,as-built
+ecs,11,condition,bfo:cond1bits.B5,B3/69,Shutters Closed,,Shutters closed,,as-built
+el,0,summary,bfo:elStatus,B3/266,EL: Detailed Conditions for Transfer,,,,as-built
+el,1,condition,bfo:cond4bits.B1,B3/113,Telescope EL overtravel limits OK,,Telescope ALT overtravel limits OK,,as-built
+el,2,condition,bfo:cond4bits.B7,B3/119,Telescope Topple brackets OK,,Telescope Obs/Maint brackets OK,,as-built
+el,3,condition,bfo:cond4bits.B2,B3/114,"M1 Cell Lights Off, Terex & 50T cranes parked, handcranks not engaged",,M1 cell light OFF & Terex And 50T crane parked and handcranks not engaged,,as-built
+el,4,condition,bfo:cond4bits.B6,B3/118,Telescope Maintenance Brackets in Observing position,,Telescope Obs/Maint brackets in Observing position,,as-built
+el,5,condition,bfo:cond4bits.B4,B3/116,Telescope EL Wrap limints OK,,Telescope ALT Wrap limits OK,,as-built
+emo,0,summary,bfo:emoStatus,B3/268,E-Stop: Detailed Conditions for Transfer,,,,as-built
+emo,1,condition,bfo:cond5bits.B2,B3/130,PLX Circuit Breaker Closed,,PLX CB cllosed i:56/12=0,CHECK(25%),as-built
+emo,2,condition,bfo:cond5bits.B3,B3/131,All E-Stops OK - none tripped,,"All E-stops OK, none tripped",,as-built
+hbs,0,summary,bfo:hbsStatus,B3/259,HBS: Detailed Conditions for Transfer,,,,as-built
+hbs,1,condition,bfo:cond7bits.B0,B3/160,HBS E-Stop not Activated,,,,as-built
+hbs,2,condition,bfo:cond7bits.B2,B3/162,HBS No Faults,,,,as-built
+hbs,3,condition,bfo:cond7bits.B1,B3/161,HBS in Auto mode,,,,as-built
+ic,0,summary,bfo:icStatus,B3/263,Instrument Cover: Detailed Conditions for Transfer,,,,as-built
+ic,1,condition,bfo:cond5bits.B6,B3/134,Instrument Cover Open or Closed,,Instrument cover opened or closed,,as-built
+loto,0,summary,bfo:lotoStatus,B3/264,LOTO: Detailed Conditions for Transfer,,,,as-built
+loto,1,condition,bfo:cond6bits.B0,B3/144,ECS PLC DH+ access enabled,,ECS PLC DH+ access enabled,,as-built
+loto,2,condition,bfo:cond4bits.B8,B3/120,Telescope/CRCS Kastel Keys - no lockout,,Telescope/CRCS Kastel keys no lockout,,as-built
+loto,3,condition,bfo:cond1bits.B6,B3/70,Top shutter Interlock Key - Enable to Run,,Top shutter Interlock key Enable to Run position,,as-built
+loto,4,condition,bfo:cond5bits.B5,B3/133,M1 Cover VFD Ready,,M1 cover VFD Ready,,as-built
+loto,5,condition,bfo:cond1bits.B8,B3/72,Dome Interlock Key - Enable to Run,,Dome Interlock key Enable to Run position,,as-built
+mc,0,summary,bfo:mcStatus,B3/260,M1 Cover: Detailed Conditions for Transfer,,,,as-built
+mc,1,condition,bfo:cond5bits.B5,B3/133,M1 Cover VFD Ready,,M1 cover VFD Ready,,as-built
+mc,2,condition,bfo:cond5bits.B7,B3/135,M1 Cover Open,,,,as-built
+mc,3,condition,bfo:cond5bits.B8,B3/136,M1 Cover Closed,,,,as-built
+mcs,0,summary,bfo:mcsStatus,B3/256,MCS: Detailed Conditions for Transfer,,,,as-built
+mcs,1,condition,bfo:cond3bits.B0,B3/96,AZ Auto Mode Init Step,,MCS AZ Auto mode Init step,,as-built
+mcs,2,condition,bfo:cond3bits.B9,B3/105,AZ Drives OK Summary Bit,,MCS AZ drives OK summary bit,,as-built
+mcs,3,condition,bfo:cond3bits.B1,B3/97,EL Auto Mode Init Step,,MCS EL Auto mode Init step,,as-built
+mcs,4,condition,bfo:cond3bits.BA,B3/106,AZ Drives Enabled OK Summary Bit,,MCS AZ drives Enabled OK summary bit,,as-built
+mcs,5,condition,bfo:cond3bits.B2,B3/98,AZ Manual Mode Init Step,,MCS AZ Manual mode Init step,,as-built
+mcs,6,condition,bfo:cond3bits.BB,B3/107,AZ Drives OverLoads not Tripped,,MCS AZ drives O/Ls not stripped summary bit,,as-built
+mcs,7,condition,bfo:cond3bits.B3,B3/99,EL Manual Mode Init Step,,MCS EL Manual mode Init step,,as-built
+mcs,8,condition,bfo:cond3bits.BC,B3/108,EL Drives OK Summary Bit,,MCS ALT drives OK summary bit,,as-built
+mcs,9,condition,bfo:cond3bits.B4,B3/100,AZ Eng Mode Init Step,,MCS AZ Eng mode Init step,,as-built
+mcs,10,condition,bfo:cond3bits.BD,B3/109,EL Drives Enabled OK Summary Bit,,MCS ALT drives Enabled OK summary bit,,as-built
+mcs,11,condition,bfo:cond3bits.B5,B3/101,EL Eng Mode Init Step,,MCS EL Eng mode Init step,,as-built
+mcs,12,condition,bfo:cond3bits.BE,B3/110,EL Drives OverLoads not Tripped,,MCS ALT drives O/Ls not stripped summary bit,CHECK(25%),as-built
+pin,0,summary,bfo:pinStatus,B3/261,Pins: Detailed Conditions for Transfer,,,,as-built
+pin,1,condition,bfo:cond3bits.BF,B3/111,Locking Pins OK for Telescope to Move,,Telescope locking pins OK for ALT and AZ to move,,as-built

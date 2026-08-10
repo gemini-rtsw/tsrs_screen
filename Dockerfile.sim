@@ -1,0 +1,20 @@
+# TSRS channel simulator: a pure-Python soft IOC (caproto) serving the bfo
+# channels for browser testing. Never deploy this alongside the real IOC --
+# duplicate channel names on one network break CA name resolution.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+
+COPY sim/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+COPY sim/tsrs_sim.py /app/tsrs_sim.py
+COPY gateway/channels.json /app/channels.json
+
+RUN useradd --uid 10002 --no-create-home --shell /usr/sbin/nologin tsrssim
+USER 10002
+
+EXPOSE 5064/tcp 5064/udp 5065/udp
+
+ENTRYPOINT ["python", "/app/tsrs_sim.py", "--channels", "/app/channels.json"]

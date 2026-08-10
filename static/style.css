@@ -1,0 +1,96 @@
+/* TSRS panel. Light palette deliberately mirrors the approved 2016 CS-Studio
+   screen -- this display is the REQ-TSRS-0211 copy of the entrance screen, so
+   visual fidelity to the reviewed design matters more than house style. */
+:root {
+  --bg: #eef0fa;
+  --fg: #10131c;
+  --panel: #ffffff;
+  --line: #b9bed4;
+  --ok-1: #4cff4c; --ok-2: #00b800; --ok-fg: #062b06;
+  --bad-1: #ff8a8a; --bad-2: #e00000; --bad-fg: #2b0606;
+  --stale: #9aa0b4; --stale-fg: #23262f;
+  --warn: #b35c00;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 16px/1.3 "Helvetica Neue", Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+main { flex: 1; padding: 1.2rem 1.4rem; overflow-y: auto; }
+
+.linkdown {
+  background: #b00000; color: #fff; padding: .65rem 1rem;
+  font-weight: 700; letter-spacing: .04em; text-align: center;
+  display: flex; gap: 1rem; justify-content: center; align-items: baseline;
+}
+.linkdown span { font-weight: 400; opacity: .9; font-size: .85em; }
+
+.scr-head { display: flex; align-items: center; gap: 1rem; margin: 0 0 1.1rem; }
+.scr-head h2 { font-size: 1.15rem; margin: 0; font-weight: 700; }
+.back {
+  font: inherit; padding: .35rem .7rem; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 5px;
+}
+.back:hover { background: #dfe3f2; }
+
+.grid { display: grid; gap: .55rem 1.6rem; }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); }
+
+.ind {
+  display: grid; grid-template-columns: 1fr 190px;
+  align-items: center; gap: .8rem; padding: .3rem 0;
+}
+.ind[data-goto] { cursor: pointer; }
+.ind[data-goto]:hover .cap { text-decoration: underline; }
+.cap { text-align: right; font-weight: 700; }
+.grid-2 .cap { text-align: left; font-weight: 400; }
+.ind-summary .cap { font-weight: 700; }
+
+.pill {
+  border: 1px solid #6d7288; border-radius: 3px;
+  padding: .42rem .5rem; text-align: center;
+  font-weight: 700; font-size: .95rem;
+  background: linear-gradient(180deg, var(--stale) 0%, #6f7488 100%);
+  color: var(--stale-fg);
+}
+.pill[data-state="1"] {
+  background: linear-gradient(180deg, var(--ok-1) 0%, var(--ok-2) 100%);
+  color: var(--ok-fg);
+}
+.pill[data-state="0"] {
+  background: linear-gradient(180deg, var(--bad-1) 0%, var(--bad-2) 100%);
+  color: var(--bad-fg);
+}
+/* Stale / disconnected must never be mistakable for a healthy reading. */
+.pill[data-state="stale"], .pill[data-state="init"] {
+  background: repeating-linear-gradient(45deg,
+    #8b90a4 0 7px, #767b90 7px 14px);
+  color: #fff; border-color: #4d5163;
+}
+.pill[data-alarm="1"] { outline: 2px solid var(--warn); outline-offset: 1px; }
+
+.ind-proposed .cap::after {
+  content: " \25B8"; color: var(--warn); font-weight: 700;
+}
+
+.mode { margin: 2rem 0 .5rem; text-align: center; }
+.mode-cap { font-weight: 700; font-size: 1.05rem; }
+.mode-val {
+  font-size: clamp(3rem, 11vw, 7.5rem); font-weight: 700; line-height: 1.05;
+}
+.mode-val[data-state="stale"] { color: var(--stale); }
+
+footer {
+  border-top: 1px solid var(--line); background: var(--panel);
+  padding: .45rem 1rem; font-size: .82rem; display: flex; gap: .7rem;
+  align-items: center; color: #4a4f63;
+}
+.sep { opacity: .4; }
+.conn::before {
+  content: "\25CF "; color: var(--stale);
+}
+.conn[data-up="1"]::before { color: var(--ok-2); }
+.conn[data-up="0"]::before { color: #e00000; }

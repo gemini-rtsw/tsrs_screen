@@ -1,0 +1,172 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TSRS — Telescope Structure Readiness Status</title>
+<link rel="stylesheet" href="style.css">
+<body>
+<div id="linkdown" class="linkdown" hidden>
+  <strong>NO DATA FROM GATEWAY</strong>
+  <span id="linkdown-detail"></span>
+</div>
+<main>
+<section class="screen" id="scr-overview" hidden>
+  <header class="scr-head"><h2>TSRS Overview</h2></header>
+  <div class="grid grid-3">
+<div class="ind ind-summary" data-goto="mcs" data-pv="bfo:mcsStatus" title="bfo:mcsStatus &#10;MCS:"><span class="cap">MCS:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="pin" data-pv="bfo:pinStatus" title="bfo:pinStatus &#10;Locking Pins:"><span class="cap">Locking Pins:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="az" data-pv="bfo:azStatus" title="bfo:azStatus &#10;Az Faults:"><span class="cap">Az Faults:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="crcs" data-pv="bfo:crcsStatus" title="bfo:crcsStatus &#10;CRCS:"><span class="cap">CRCS:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="ic" data-pv="bfo:icStatus" title="bfo:icStatus &#10;Instr Cover:"><span class="cap">Instr Cover:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="el" data-pv="bfo:elStatus" title="bfo:elStatus &#10;El Faults:"><span class="cap">El Faults:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="ecs" data-pv="bfo:ecsStatus" title="bfo:ecsStatus &#10;ECS:"><span class="cap">ECS:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="mc" data-pv="bfo:mcStatus" title="bfo:mcStatus &#10;M1 Cover:"><span class="cap">M1 Cover:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="loto" data-pv="bfo:lotoStatus" title="bfo:lotoStatus &#10;LOTO:"><span class="cap">LOTO:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="hbs" data-pv="bfo:hbsStatus" title="bfo:hbsStatus &#10;HBS:"><span class="cap">HBS:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-proposed" data-pv="bfo:cond2bits.B2" title="bfo:cond2bits.B2 &#10;Observing floor lights not ON"><span class="cap">Obs Floor Lights:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-summary" data-goto="emo" data-pv="bfo:emoStatus" title="bfo:emoStatus &#10;E-Stop:"><span class="cap">E-Stop:</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-proposed" data-pv="bfo:cond5bits.B4" title="bfo:cond5bits.B4 &#10;GIS PLC racks OK"><span class="cap">GIS PLC Racks:</span><span class="pill" data-state="init">--</span></div>
+  </div>
+  <div class="mode">
+    <div class="mode-cap">Observatory Mode:</div>
+    <div class="mode-val" id="obsmode">--</div>
+  </div>
+</section>
+<section class="screen" id="scr-az" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>Az Faults — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:azStatus" title="bfo:azStatus &#10;AZ: Detailed Conditions for Transfer"><span class="cap">AZ: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B5" title="bfo:cond4bits.B5 &#10;2T Jib crane in park position"><span class="cap">2T jib crane in park position</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B0" title="bfo:cond4bits.B0 &#10;Telescope AZ overtravel limits OK"><span class="cap">Telescope AZ overtravel limits OK</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B2" title="bfo:cond4bits.B2 &#10;M1 cell light OFF &amp; Terex And 50T crane parked and handcranks not engaged"><span class="cap">M1 Cell Lights Off, Terex &amp; 50T cranes parked, handcranks not engaged</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B6" title="bfo:cond4bits.B6 &#10;Telescope Obs/Maint brackets in Observing position"><span class="cap">Telescope Maintenance Brackets in Observing position</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B3" title="bfo:cond4bits.B3 &#10;Telescope AZ Wrap limits OK"><span class="cap">Telescope AZ Wrap limints OK</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-crcs" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>CRCS — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:crcsStatus" title="bfo:crcsStatus &#10;CRCS: Detailed Conditions for Transfer"><span class="cap">CRCS: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B6" title="bfo:cond3bits.B6 &#10;CRCS Rotator Auto mode Init step"><span class="cap">Rotator Auto mode Init step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.BC" title="bfo:cond4bits.BC &#10;CRCS Rotator CW EOT no fault"><span class="cap">Rotator CW EOT no fault</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B7" title="bfo:cond3bits.B7 &#10;CRCS Wrap Auto mode Init step"><span class="cap">Wrap Auto mode Init step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.BD" title="bfo:cond4bits.BD &#10;CRCS Rotator CCW EOT no fault"><span class="cap">Rotator CCW EOT no fault</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B8" title="bfo:cond3bits.B8 &#10;CRCS Rotator/Wrap Manual mode Init step"><span class="cap">Rotator/Wrap Manual mode Init step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.BE" title="bfo:cond4bits.BE &#10;CRCS Wrap Servo drives no fault"><span class="cap">Wrap Servo Drives no fault</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B9" title="bfo:cond4bits.B9 &#10;CRCS PMAC no fault"><span class="cap">PMAC no fault</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.BF" title="bfo:cond4bits.BF &#10;CRCS Wrap DC busno fault"><span class="cap">Wrap DC bus no fault</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.BA" title="bfo:cond4bits.BA &#10;CRCS Rotator Servo drives no fault"><span class="cap">Rotator Servo Drives no fault</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B0" title="bfo:cond5bits.B0 &#10;CRCS Wrap CW EOT no fault"><span class="cap">Wrap CW EOT no fault</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.BB" title="bfo:cond4bits.BB &#10;CRCS Rotator DC busno fault"><span class="cap">Rotator DC bus no fault</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B1" title="bfo:cond5bits.B1 &#10;CRCS Wrap CCW EOT no fault"><span class="cap">Wrap CCW EOT no fault</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-ecs" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>ECS — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:ecsStatus" title="bfo:ecsStatus &#10;ECS: Detailed Conditions for Transfer"><span class="cap">ECS: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond1bits.B0" title="bfo:cond1bits.B0 &#10;Top shutter Power seq Init step"><span class="cap">Top Shutter Power seq Init step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond2bits.B0" title="bfo:cond2bits.B0 &#10;East VGate closed I:31/03"><span class="cap">East Vent Gate Closed</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond1bits.B1" title="bfo:cond1bits.B1 &#10;Bottom shutter Power seq Init step"><span class="cap">Bottom Shutter Power seq Init step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond2bits.B1" title="bfo:cond2bits.B1 &#10;West VGate closed I:31/02"><span class="cap">West Vent Gate Closed</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond1bits.B2" title="bfo:cond1bits.B2 &#10;Dome Power seq Init step"><span class="cap">Dome Power seq Init step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond2bits.B3" title="bfo:cond2bits.B3 &#10;ECS in computer mode B3/10"><span class="cap">ECS in Computer Mode</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond1bits.B3" title="bfo:cond1bits.B3 &#10;East VGate Power seq Init step"><span class="cap">Ease VGate Power seq Init step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond2bits.B4" title="bfo:cond2bits.B4 &#10;Top shutter UP overtravel limit I:30/15"><span class="cap">Top Shutter UP Overtravel Limit</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond1bits.B4" title="bfo:cond1bits.B4 &#10;West VGate Power seq Init step"><span class="cap">West VGate Power seq Init step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond2bits.B5" title="bfo:cond2bits.B5 &#10;Top shutter DOWN overtravel limit I:30/05"><span class="cap">Top Shutter Down Overtravel Limit</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond1bits.B5" title="bfo:cond1bits.B5 &#10;Shutters closed"><span class="cap">Shutters Closed</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-el" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>El Faults — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:elStatus" title="bfo:elStatus &#10;EL: Detailed Conditions for Transfer"><span class="cap">EL: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B1" title="bfo:cond4bits.B1 &#10;Telescope ALT overtravel limits OK"><span class="cap">Telescope EL overtravel limits OK</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B7" title="bfo:cond4bits.B7 &#10;Telescope Obs/Maint brackets OK"><span class="cap">Telescope Topple brackets OK</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B2" title="bfo:cond4bits.B2 &#10;M1 cell light OFF &amp; Terex And 50T crane parked and handcranks not engaged"><span class="cap">M1 Cell Lights Off, Terex &amp; 50T cranes parked, handcranks not engaged</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B6" title="bfo:cond4bits.B6 &#10;Telescope Obs/Maint brackets in Observing position"><span class="cap">Telescope Maintenance Brackets in Observing position</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B4" title="bfo:cond4bits.B4 &#10;Telescope ALT Wrap limits OK"><span class="cap">Telescope EL Wrap limints OK</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-emo" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>E-Stop — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:emoStatus" title="bfo:emoStatus &#10;E-Stop: Detailed Conditions for Transfer"><span class="cap">E-Stop: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B2" title="bfo:cond5bits.B2 &#10;PLX CB cllosed i:56/12=0"><span class="cap">PLX Circuit Breaker Closed</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B3" title="bfo:cond5bits.B3 &#10;All E-stops OK, none tripped"><span class="cap">All E-Stops OK - none tripped</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-hbs" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>HBS — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:hbsStatus" title="bfo:hbsStatus &#10;HBS: Detailed Conditions for Transfer"><span class="cap">HBS: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond7bits.B0" title="bfo:cond7bits.B0 &#10;HBS E-Stop not Activated"><span class="cap">HBS E-Stop not Activated</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond7bits.B2" title="bfo:cond7bits.B2 &#10;HBS No Faults"><span class="cap">HBS No Faults</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond7bits.B1" title="bfo:cond7bits.B1 &#10;HBS in Auto mode"><span class="cap">HBS in Auto mode</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-ic" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>Instrument Cover — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:icStatus" title="bfo:icStatus &#10;Instrument Cover: Detailed Conditions for Transfer"><span class="cap">Instrument Cover: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B6" title="bfo:cond5bits.B6 &#10;Instrument cover opened or closed"><span class="cap">Instrument Cover Open or Closed</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-loto" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>LOTO — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:lotoStatus" title="bfo:lotoStatus &#10;LOTO: Detailed Conditions for Transfer"><span class="cap">LOTO: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond6bits.B0" title="bfo:cond6bits.B0 &#10;ECS PLC DH+ access enabled"><span class="cap">ECS PLC DH+ access enabled</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond4bits.B8" title="bfo:cond4bits.B8 &#10;Telescope/CRCS Kastel keys no lockout"><span class="cap">Telescope/CRCS Kastel Keys - no lockout</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond1bits.B6" title="bfo:cond1bits.B6 &#10;Top shutter Interlock key Enable to Run position"><span class="cap">Top shutter Interlock Key - Enable to Run</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B5" title="bfo:cond5bits.B5 &#10;M1 cover VFD Ready"><span class="cap">M1 Cover VFD Ready</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond1bits.B8" title="bfo:cond1bits.B8 &#10;Dome Interlock key Enable to Run position"><span class="cap">Dome Interlock Key - Enable to Run</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-proposed" data-pv="bfo:cond1bits.B7" title="bfo:cond1bits.B7 &#10;Bottom shutter Interlock key Enable to Run position"><span class="cap">Bottom Shutter Interlock Key - Enable to Run</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-proposed" data-pv="bfo:cond1bits.B9" title="bfo:cond1bits.B9 &#10;East VGate Interlock key Enable to Run position"><span class="cap">East Vent Gate Interlock Key - Enable to Run</span><span class="pill" data-state="init">--</span></div>
+<div class="ind ind-proposed" data-pv="bfo:cond1bits.BA" title="bfo:cond1bits.BA &#10;West VGate Interlock key Enable to Run position"><span class="cap">West Vent Gate Interlock Key - Enable to Run</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-mc" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>M1 Cover — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:mcStatus" title="bfo:mcStatus &#10;M1 Cover: Detailed Conditions for Transfer"><span class="cap">M1 Cover: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B5" title="bfo:cond5bits.B5 &#10;M1 cover VFD Ready"><span class="cap">M1 Cover VFD Ready</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B7" title="bfo:cond5bits.B7 &#10;M1 Cover Open"><span class="cap">M1 Cover Open</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond5bits.B8" title="bfo:cond5bits.B8 &#10;M1 Cover Closed"><span class="cap">M1 Cover Closed</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-mcs" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>MCS — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:mcsStatus" title="bfo:mcsStatus &#10;MCS: Detailed Conditions for Transfer"><span class="cap">MCS: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B0" title="bfo:cond3bits.B0 &#10;MCS AZ Auto mode Init step"><span class="cap">AZ Auto Mode Init Step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B9" title="bfo:cond3bits.B9 &#10;MCS AZ drives OK summary bit"><span class="cap">AZ Drives OK Summary Bit</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B1" title="bfo:cond3bits.B1 &#10;MCS EL Auto mode Init step"><span class="cap">EL Auto Mode Init Step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.BA" title="bfo:cond3bits.BA &#10;MCS AZ drives Enabled OK summary bit"><span class="cap">AZ Drives Enabled OK Summary Bit</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B2" title="bfo:cond3bits.B2 &#10;MCS AZ Manual mode Init step"><span class="cap">AZ Manual Mode Init Step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.BB" title="bfo:cond3bits.BB &#10;MCS AZ drives O/Ls not stripped summary bit"><span class="cap">AZ Drives OverLoads not Tripped</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B3" title="bfo:cond3bits.B3 &#10;MCS EL Manual mode Init step"><span class="cap">EL Manual Mode Init Step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.BC" title="bfo:cond3bits.BC &#10;MCS ALT drives OK summary bit"><span class="cap">EL Drives OK Summary Bit</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B4" title="bfo:cond3bits.B4 &#10;MCS AZ Eng mode Init step"><span class="cap">AZ Eng Mode Init Step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.BD" title="bfo:cond3bits.BD &#10;MCS ALT drives Enabled OK summary bit"><span class="cap">EL Drives Enabled OK Summary Bit</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.B5" title="bfo:cond3bits.B5 &#10;MCS EL Eng mode Init step"><span class="cap">EL Eng Mode Init Step</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.BE" title="bfo:cond3bits.BE &#10;MCS ALT drives O/Ls not stripped summary bit"><span class="cap">EL Drives OverLoads not Tripped</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+<section class="screen" id="scr-pin" hidden>
+  <header class="scr-head"><button class="back" data-goto="overview">&larr; Overview</button><h2>Locking Pins — Detailed Conditions for Transfer</h2></header>
+  <div class="grid grid-2">
+<div class="ind ind-summary" data-pv="bfo:pinStatus" title="bfo:pinStatus &#10;Pins: Detailed Conditions for Transfer"><span class="cap">Pins: Detailed Conditions for Transfer</span><span class="pill" data-state="init">--</span></div>
+<div class="ind" data-pv="bfo:cond3bits.BF" title="bfo:cond3bits.BF &#10;Telescope locking pins OK for ALT and AZ to move"><span class="cap">Locking Pins OK for Telescope to Move</span><span class="pill" data-state="init">--</span></div>
+  </div>
+</section>
+</main>
+<footer>
+  <span id="conn" class="conn">connecting&hellip;</span>
+  <span class="sep">|</span>
+  <span>Gemini North · Detailed Conditions for Transfer</span>
+  <span class="sep">|</span>
+  <span id="stamp"></span>
+</footer>
+<script src="app.js"></script>
+</body>

@@ -1,0 +1,74 @@
+plc_bit,epics_pv,description,feeds
+B3/64,bfo:cond1bits.B0,Top shutter Power seq Init step,B3/258
+B3/65,bfo:cond1bits.B1,Bottom shutter Power seq Init step,B3/258
+B3/66,bfo:cond1bits.B2,Dome Power seq Init step,B3/258
+B3/67,bfo:cond1bits.B3,East VGate Power seq Init step,B3/258
+B3/68,bfo:cond1bits.B4,West VGate Power seq Init step,B3/258
+B3/69,bfo:cond1bits.B5,Shutters closed,B3/258
+B3/70,bfo:cond1bits.B6,Top shutter Interlock key Enable to Run position,B3/264
+B3/71,bfo:cond1bits.B7,Bottom shutter Interlock key Enable to Run position,B3/264
+B3/72,bfo:cond1bits.B8,Dome Interlock key Enable to Run position,B3/264
+B3/73,bfo:cond1bits.B9,East VGate Interlock key Enable to Run position,B3/264
+B3/74,bfo:cond1bits.BA,West VGate Interlock key Enable to Run position,B3/264
+B3/75,bfo:cond1bits.BB,Unassigned,
+B3/76,bfo:cond1bits.BC,Unassigned,
+B3/77,bfo:cond1bits.BD,Unassigned,
+B3/78,bfo:cond1bits.BE,Unassigned,
+B3/79,bfo:cond1bits.BF,Bottom shutter skew OK,
+B3/80,bfo:cond2bits.B0,East VGate closed I:31/03,
+B3/81,bfo:cond2bits.B1,West VGate closed I:31/02,
+B3/82,bfo:cond2bits.B2,Observing floor lights not ON,B3/262
+B3/83,bfo:cond2bits.B3,ECS in computer mode B3/10,B3/258
+B3/84,bfo:cond2bits.B4,Top shutter UP overtravel limit I:30/15,B3/258
+B3/85,bfo:cond2bits.B5,Top shutter DOWN overtravel limit I:30/05,B3/258
+B3/86,bfo:cond2bits.B6,Bottom shutter UP overtravel limit I:30/14,
+B3/87,bfo:cond2bits.B7,Bottom shutter DOWN overtravel limit I:30/04,
+B3/96,bfo:cond3bits.B0,MCS AZ Auto mode Init step,B3/256
+B3/97,bfo:cond3bits.B1,MCS EL Auto mode Init step,B3/256
+B3/98,bfo:cond3bits.B2,MCS AZ Manual mode Init step,B3/256
+B3/99,bfo:cond3bits.B3,MCS EL Manual mode Init step,B3/256
+B3/100,bfo:cond3bits.B4,MCS AZ Eng mode Init step,B3/256
+B3/101,bfo:cond3bits.B5,MCS EL Eng mode Init step,B3/256
+B3/102,bfo:cond3bits.B6,CRCS Rotator Auto mode Init step,B3/257
+B3/103,bfo:cond3bits.B7,CRCS Wrap Auto mode Init step,B3/257
+B3/104,bfo:cond3bits.B8,CRCS Rotator/Wrap Manual mode Init step,B3/257
+B3/105,bfo:cond3bits.B9,MCS AZ drives OK summary bit,B3/256
+B3/106,bfo:cond3bits.BA,MCS AZ drives Enabled OK summary bit,B3/256
+B3/107,bfo:cond3bits.BB,MCS AZ drives O/Ls not stripped summary bit,B3/256
+B3/108,bfo:cond3bits.BC,MCS ALT drives OK summary bit,B3/256
+B3/109,bfo:cond3bits.BD,MCS ALT drives Enabled OK summary bit,B3/256
+B3/110,bfo:cond3bits.BE,MCS ALT drives O/Ls not stripped summary bit,B3/256
+B3/111,bfo:cond3bits.BF,Telescope locking pins OK for ALT and AZ to move,B3/261
+B3/112,bfo:cond4bits.B0,Telescope AZ overtravel limits OK,B3/265
+B3/113,bfo:cond4bits.B1,Telescope ALT overtravel limits OK,B3/266
+B3/114,bfo:cond4bits.B2,M1 cell light OFF & Terex And 50T crane parked and handcranks not engaged,B3/265;B3/266
+B3/115,bfo:cond4bits.B3,Telescope AZ Wrap limits OK,B3/265
+B3/116,bfo:cond4bits.B4,Telescope ALT Wrap limits OK,B3/266
+B3/117,bfo:cond4bits.B5,2T Jib crane in park position,B3/265
+B3/118,bfo:cond4bits.B6,Telescope Obs/Maint brackets in Observing position,B3/265;B3/266
+B3/119,bfo:cond4bits.B7,Telescope Obs/Maint brackets OK,B3/266
+B3/120,bfo:cond4bits.B8,Telescope/CRCS Kastel keys no lockout,B3/264
+B3/121,bfo:cond4bits.B9,CRCS PMAC no fault,B3/257
+B3/122,bfo:cond4bits.BA,CRCS Rotator Servo drives no fault,B3/257
+B3/123,bfo:cond4bits.BB,CRCS Rotator DC busno fault,B3/257
+B3/124,bfo:cond4bits.BC,CRCS Rotator CW EOT no fault,B3/257
+B3/125,bfo:cond4bits.BD,CRCS Rotator CCW EOT no fault,B3/257
+B3/126,bfo:cond4bits.BE,CRCS Wrap Servo drives no fault,B3/257
+B3/127,bfo:cond4bits.BF,CRCS Wrap DC busno fault,B3/257
+B3/128,bfo:cond5bits.B0,CRCS Wrap CW EOT no fault,B3/257
+B3/129,bfo:cond5bits.B1,CRCS Wrap CCW EOT no fault,B3/257
+B3/130,bfo:cond5bits.B2,PLX CB cllosed i:56/12=0,B3/268
+B3/131,bfo:cond5bits.B3,"All E-stops OK, none tripped",B3/268
+B3/132,bfo:cond5bits.B4,GIS PLC racks OK,B3/267
+B3/133,bfo:cond5bits.B5,M1 cover VFD Ready,B3/260
+B3/134,bfo:cond5bits.B6,Instrument cover opened or closed,B3/263
+B3/135,bfo:cond5bits.B7,,
+B3/136,bfo:cond5bits.B8,,
+B3/137,bfo:cond5bits.B9,,
+B3/138,bfo:cond5bits.BA,,
+B3/139,bfo:cond5bits.BB,,
+B3/140,bfo:cond5bits.BC,,
+B3/141,bfo:cond5bits.BD,,
+B3/142,bfo:cond5bits.BE,,
+B3/143,bfo:cond5bits.BF,,
+B3/144,bfo:cond6bits.B0,ECS PLC DH+ access enabled,B3/264

@@ -1,0 +1,166 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  # The panel and the gateway's channel list are both generated from the CSVs.
+  # If someone edits a CSV without regenerating, the committed panel silently
+  # disagrees with the indicator map -- so fail the build on drift rather than
+  # ship a display that does not match its own source of truth.
+  generated-in-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Regenerate panel from CSVs
+        run: python3 tools/gen_panel.py
+      - name: Fail if committed output is stale
+        run: |
+          if ! git diff --exit-code -- static gateway/channels.json; then
+            echo "::error::static/ or gateway/channels.json is out of date."
+            echo "Run 'python3 tools/gen_panel.py' and commit the result."
+            exit 1
+          fi
+
+  smoke:
+    # End-to-end: real Channel Access between a caproto soft IOC and the
+    # gateway. Also asserts the liveness path, which is the one behaviour that
+    # must never regress -- a panel that holds stale green LEDs when the IOC
+    # dies is worse than a blank one.
+    runs-on: ubuntu-latest
+    needs: generated-in-sync
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build images
+        run: |
+          docker build -t tsrs-web:ci -f Dockerfile .
+          docker build -t tsrs-sim:ci -f Dockerfile.sim .
+
+      - name: Start stack
+        run: |
+          docker network create ca
+          docker run -d --name tsrs-sim --network ca tsrs-sim:ci \
+            --chaos 0.08 --period 4
+          # x86_64 runner, so exercise the production pyepics backend here.
+          docker run -d --name tsrs-web --network ca -p 8080:8080 \
+            -e TSRS_CA_BACKEND=pyepics \
+            -e EPICS_CA_ADDR_LIST=tsrs-sim \
+            -e EPICS_CA_AUTO_ADDR_LIST=NO \
+            tsrs-web:ci
+
+      - name: Wait for channels to connect
+        run: |
+          for i in $(seq 1 60); do
+            n=$(curl -sf localhost:8080/api/healthz \
+                | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_connected"])' \
+                2>/dev/null || echo 0)
+            echo "t+${i}s connected=$n"
+            [ "$n" -gt 0 ] && exit 0
+            sleep 1
+          done
+          echo "::error::no channels connected"; docker logs tsrs-web; exit 1
+
+      - name: Assert full channel set and real values
+        run: |
+          curl -sf localhost:8080/api/status > /tmp/s.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open("/tmp/s.json"))
+          ch = d["channels"]
+          assert d["total"] == d["connected"] == 76, (d["total"], d["connected"])
+          vals = [r["value"] for r in ch.values()]
+          assert all(v is not None for v in vals), "some channels have no value"
+          assert any(v == 0 for v in vals) and any(v == 1 for v in vals), \
+              "expected a mix of Ready/Not Ready from the simulator"
+          modes = [ch["bfo:%sMode" % m]["value"] for m in ("summit", "standby", "base")]
+          assert sum(modes) == 1, "exactly one Observatory Mode PV must read 1: %r" % modes
+          print("ok: 76/76 connected, values present, one mode active")
+          PY
+
+      - name: Assert dead IOC is reported as disconnected
+        run: |
+          docker stop tsrs-sim
+          for i in $(seq 1 45); do
+            n=$(curl -sf localhost:8080/api/healthz \
+                | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_connected"])')
+            [ "$n" = "0" ] && { echo "disconnect detected at t+${i}s"; break; }
+            sleep 1
+          done
+          [ "$n" = "0" ] || { echo "::error::stale channels still reported connected"; exit 1; }
+          # The gateway itself must stay healthy: a dead IOC is not a sick
+          # gateway, and restarting it would drop the panel for no reason.
+          ok=$(curl -sf localhost:8080/api/healthz \
+               | python3 -c 'import json,sys;print(json.load(sys.stdin)["ok"])')
+          [ "$ok" = "True" ] || { echo "::error::gateway reported itself unhealthy"; exit 1; }
+
+      - name: Assert reconnect after IOC returns
+        run: |
+          docker start tsrs-sim
+          for i in $(seq 1 60); do
+            n=$(curl -sf localhost:8080/api/healthz \
+                | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_connected"])')
+            [ "$n" = "76" ] && { echo "reconnected at t+${i}s"; exit 0; }
+            sleep 1
+          done
+          echo "::error::did not reconnect"; docker logs tsrs-web; exit 1
+
+      - name: Gateway logs
+        if: always()
+        run: docker logs tsrs-web 2>&1 | tail -40
+
+  publish:
+    needs: [generated-in-sync, smoke]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push gateway
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          # amd64 only, on purpose: pyepics ships an x86-64 libca and the
+          # deployment targets are x86_64 EL9. An arm64 image would start and
+          # then die on the first CA call.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,50 @@
+# Development / test stack: simulator + gateway on a bridge network.
+#
+# WHY BRIDGE HERE BUT HOST IN PRODUCTION
+# -------------------------------------
+# Channel Access finds channels by UDP. On the real network the site uses a
+# *broadcast* address (EPICS_CA_ADDR_LIST=10.2.2.255), which cannot cross a
+# bridged/NAT network -- production therefore requires host networking (see
+# deploy/tsrs-web.container).
+#
+# The dev stack defaults to TSRS_CA_BACKEND=caproto so it runs on arm64 laptops
+# (pyepics bundles an x86-64 libca only). Production uses pyepics -- override
+# with TSRS_CA_BACKEND=pyepics on an x86_64 host to exercise the real client.
+#
+# For testing we point the client at the simulator by name, so name resolution
+# is *unicast* UDP, which works fine on a bridge and also works on macOS where
+# --network=host is not available. EPICS_CA_AUTO_ADDR_LIST must be NO, or libca
+# will also broadcast onto the docker bridge and log noise.
+
+version: "3.8"
+
+services:
+  sim:
+    build:
+      context: .
+      dockerfile: Dockerfile.sim
+    image: tsrs-sim:dev
+    container_name: tsrs-sim
+    command: ["--chaos", "0.08", "--period", "6"]
+    networks: [ca]
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tsrs-web:dev
+    container_name: tsrs-web
+    depends_on: [sim]
+    environment:
+      TSRS_CA_BACKEND: "${TSRS_CA_BACKEND:-caproto}"
+      EPICS_CA_ADDR_LIST: "tsrs-sim"
+      EPICS_CA_AUTO_ADDR_LIST: "NO"
+      EPICS_CA_MAX_ARRAY_BYTES: "160000"
+      TSRS_LOGLEVEL: "INFO"
+    ports:
+      - "8080:8080"
+    networks: [ca]
+
+networks:
+  ca:
+    driver: bridge

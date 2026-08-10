@@ -1,0 +1,11 @@
+level,plc_bit,epics_pv,description,feeds
+summary,B3/262,,Lights OK,Lights OK B3/262 = B3/82
+summary,B3/267,,PLC OK,PLC OK B3/267 = B3/132
+condition,B3/71,bfo:cond1bits.B7,Bottom shutter Interlock key Enable to Run position,B3/264
+condition,B3/73,bfo:cond1bits.B9,East VGate Interlock key Enable to Run position,B3/264
+condition,B3/74,bfo:cond1bits.BA,West VGate Interlock key Enable to Run position,B3/264
+condition,B3/79,bfo:cond1bits.BF,Bottom shutter skew OK,
+condition,B3/82,bfo:cond2bits.B2,Observing floor lights not ON,B3/262
+condition,B3/86,bfo:cond2bits.B6,Bottom shutter UP overtravel limit I:30/14,
+condition,B3/87,bfo:cond2bits.B7,Bottom shutter DOWN overtravel limit I:30/04,
+condition,B3/132,bfo:cond5bits.B4,GIS PLC racks OK,B3/267

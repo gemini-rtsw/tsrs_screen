@@ -1,0 +1,49 @@
+{
+  "title": "TSRS — Telescope Structure Readiness Status",
+  "subtitle": "Gemini North · Detailed Conditions for Transfer",
+
+  "poll_hz": 2,
+  "stale_after_s": 5.0,
+
+  "//heartbeat": [
+    "The 2015 bit-grouping spreadsheet specifies a 'BFO PLC heartbeat bit' but",
+    "gives no PLC address, and no such PV appears in the as-built screens.",
+    "Ask the controls engineer for it, then set heartbeat_pv below. Until it is",
+    "set, a PLC that is alive on the network but no longer scanning cannot be",
+    "detected by this panel. See NOTE ON LIVENESS in tools/gen_panel.py."
+  ],
+  "heartbeat_pv": null,
+  "heartbeat_timeout_s": 5.0,
+
+  "mode_pvs": [
+    ["Summit",  "bfo:summitMode"],
+    ["Standby", "bfo:standbyMode"],
+    ["Base",    "bfo:baseMode"]
+  ],
+
+  "include_compliance_additions": true,
+  "include_optional": false,
+
+  "screen_titles": {
+    "overview": "TSRS Overview",
+    "mcs":  "MCS — Detailed Conditions for Transfer",
+    "crcs": "CRCS — Detailed Conditions for Transfer",
+    "ecs":  "ECS — Detailed Conditions for Transfer",
+    "hbs":  "HBS — Detailed Conditions for Transfer",
+    "mc":   "M1 Cover — Detailed Conditions for Transfer",
+    "ic":   "Instrument Cover — Detailed Conditions for Transfer",
+    "pin":  "Locking Pins — Detailed Conditions for Transfer",
+    "loto": "LOTO — Detailed Conditions for Transfer",
+    "az":   "Az Faults — Detailed Conditions for Transfer",
+    "el":   "El Faults — Detailed Conditions for Transfer",
+    "emo":  "E-Stop — Detailed Conditions for Transfer"
+  },
+
+  "overview_order": [
+    "bfo:mcsStatus", "bfo:pinStatus", "bfo:azStatus",
+    "bfo:crcsStatus", "bfo:icStatus", "bfo:elStatus",
+    "bfo:ecsStatus", "bfo:mcStatus", "bfo:lotoStatus",
+    "bfo:hbsStatus", "bfo:cond2bits.B2", "bfo:emoStatus",
+    "bfo:cond5bits.B4"
+  ]
+}

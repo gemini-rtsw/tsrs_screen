@@ -1,0 +1,17 @@
+# Indicators required by the TSRS design but absent from the as-built screens.
+# Kept separate from tsrs_indicators.csv so "as-built" and "proposed" never blur.
+# Every PV below already exists in the bfo condition words -- no IOC change needed.
+# Enable/disable as a set via "include_compliance_additions" in tsrs.config.json;
+# drop the "optional" rows with "include_optional": false.
+#
+# Evidence: reference/gaps.csv, reference/plc_summary_bits.csv
+#
+screen,order,kind,pv,plc_bit,label,links_to,design_description,review,source
+loto,90,condition,bfo:cond1bits.B7,B3/71,Bottom Shutter Interlock Key - Enable to Run,,Bottom shutter Interlock key Enable to Run position,,proposed:REQ-TSRS-0210
+loto,91,condition,bfo:cond1bits.B9,B3/73,East Vent Gate Interlock Key - Enable to Run,,East VGate Interlock key Enable to Run position,,proposed:REQ-TSRS-0210
+loto,92,condition,bfo:cond1bits.BA,B3/74,West Vent Gate Interlock Key - Enable to Run,,West VGate Interlock key Enable to Run position,,proposed:REQ-TSRS-0210
+overview,80,condition,bfo:cond2bits.B2,B3/82,Obs Floor Lights:,,Observing floor lights not ON,,proposed:B3/262-Lights-OK
+overview,81,condition,bfo:cond5bits.B4,B3/132,GIS PLC Racks:,,GIS PLC racks OK,,proposed:B3/267-PLC-OK
+ecs,93,condition,bfo:cond1bits.BF,B3/79,Bottom Shutter Skew OK,,Bottom shutter skew OK,,optional
+ecs,94,condition,bfo:cond2bits.B6,B3/86,Bottom Shutter UP Overtravel Limit,,Bottom shutter UP overtravel limit I:30/14,,optional
+ecs,95,condition,bfo:cond2bits.B7,B3/87,Bottom Shutter DOWN Overtravel Limit,,Bottom shutter DOWN overtravel limit I:30/04,,optional
