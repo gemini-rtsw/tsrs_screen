@@ -30,10 +30,13 @@ docker stop tsrs-sim
 ```
 
 Within ~1 s every indicator must switch to a hatched **NO DATA** pill and a red
-banner must appear. If it ever shows stale green LEDs instead, the liveness
-logic is broken — that failure mode is worse than a blank screen, because the
-whole point of the display is to be trusted before a mode switch.
-`docker start tsrs-sim` recovers in ~3 s.
+banner must appear. Values go to `None`, not to their last-known state, and no
+indicator falls through to "Not Ready" — a comms failure must never be able to
+fake a plant condition in either direction. If it ever shows stale green LEDs
+instead, the liveness logic is broken; that failure mode is worse than a blank
+screen, because the point of the display is to be trusted before a mode switch.
+
+`docker start tsrs-sim` recovers in ~6 s.
 
 ## How it works
 
@@ -61,6 +64,24 @@ comes from three independent layers:
    plus server beacons. Authoritative for "is the IOC talking to us".
 2. **Gateway reachability**, whole panel. A failed `fetch` blanks everything.
 3. **PLC heartbeat** — *not yet wired, see below.*
+
+A fourth mechanism guards the client itself. A CA client can wedge in ways it
+never recovers from — caproto's search-retry thread dies on a transient DNS
+failure, after which no channel is ever searched for again. The panel fails
+loud (all NO DATA), which is safe, but it would stay that way until a human
+noticed. So a watchdog rebuilds the CA client after `TSRS_CA_WATCHDOG_S`
+(default 60 s) with *zero* channels connected. The trigger is deliberately zero,
+never a partial outage: some channels being down is a plant condition, not a
+client fault. Rebuild count is exposed as `ca_rebuilds` on `/api/healthz`; a
+steadily climbing value means the IOC is unreachable, not that the gateway is
+broken.
+
+**Dev stack addressing:** `EPICS_CA_ADDR_LIST` points at a *static IP*
+(`172.28.7.2`), not the container name, on purpose. With a name, stopping the
+simulator removes it from Docker's embedded DNS, and caproto's search thread
+dies as described above — the client then never reconnects even after the IOC
+returns. An IP cannot fail to resolve, and it mirrors production, where the
+address list holds literal addresses.
 
 ## Source of truth
 

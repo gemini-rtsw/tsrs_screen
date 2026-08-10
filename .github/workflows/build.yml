@@ -51,13 +51,16 @@ jobs:
 
       - name: Start stack
         run: |
-          docker network create ca
-          docker run -d --name tsrs-sim --network ca tsrs-sim:ci \
-            --chaos 0.08 --period 4
+          # Static IP, not a container name: a stopped container leaves
+          # Docker DNS, which kills the CA client's search thread and makes the
+          # reconnect assertion below fail for the wrong reason.
+          docker network create --subnet 172.28.7.0/24 ca
+          docker run -d --name tsrs-sim --network ca --ip 172.28.7.2 \
+            tsrs-sim:ci --chaos 0.08 --period 4
           # x86_64 runner, so exercise the production pyepics backend here.
           docker run -d --name tsrs-web --network ca -p 8080:8080 \
             -e TSRS_CA_BACKEND=pyepics \
-            -e EPICS_CA_ADDR_LIST=tsrs-sim \
+            -e EPICS_CA_ADDR_LIST=172.28.7.2 \
             -e EPICS_CA_AUTO_ADDR_LIST=NO \
             tsrs-web:ci
 

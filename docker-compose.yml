@@ -11,10 +11,17 @@
 # (pyepics bundles an x86-64 libca only). Production uses pyepics -- override
 # with TSRS_CA_BACKEND=pyepics on an x86_64 host to exercise the real client.
 #
-# For testing we point the client at the simulator by name, so name resolution
-# is *unicast* UDP, which works fine on a bridge and also works on macOS where
-# --network=host is not available. EPICS_CA_AUTO_ADDR_LIST must be NO, or libca
-# will also broadcast onto the docker bridge and log noise.
+# For testing we point the client at the simulator by *static IP* on a fixed
+# subnet, so name resolution is unicast UDP. This works on a bridge and on macOS
+# where --network=host is unavailable. EPICS_CA_AUTO_ADDR_LIST must be NO, or
+# the client also broadcasts onto the docker bridge and logs noise.
+#
+# A STATIC IP, NOT A CONTAINER NAME, ON PURPOSE.
+# With a name here, stopping the simulator removes it from Docker's embedded
+# DNS. caproto's search-retry thread then raises CaprotoNetworkError("Name or
+# service not known") and *dies*, so the client never searches again and cannot
+# reconnect even after the IOC returns. An IP cannot fail to resolve, and it
+# also mirrors production, where EPICS_CA_ADDR_LIST holds literal addresses.
 
 version: "3.8"
 
@@ -26,7 +33,9 @@ services:
     image: tsrs-sim:dev
     container_name: tsrs-sim
     command: ["--chaos", "0.08", "--period", "6"]
-    networks: [ca]
+    networks:
+      ca:
+        ipv4_address: 172.28.7.2
 
   gateway:
     build:
@@ -37,10 +46,13 @@ services:
     depends_on: [sim]
     environment:
       TSRS_CA_BACKEND: "${TSRS_CA_BACKEND:-caproto}"
-      EPICS_CA_ADDR_LIST: "tsrs-sim"
+      EPICS_CA_ADDR_LIST: "172.28.7.2"
       EPICS_CA_AUTO_ADDR_LIST: "NO"
       EPICS_CA_MAX_ARRAY_BYTES: "160000"
       TSRS_LOGLEVEL: "INFO"
+      # Rebuild the CA client after this many seconds with zero channels
+      # connected. 0 disables. Production default is 60.
+      TSRS_CA_WATCHDOG_S: "${TSRS_CA_WATCHDOG_S:-60}"
     ports:
       - "8080:8080"
     networks: [ca]
@@ -48,3 +60,6 @@ services:
 networks:
   ca:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.7.0/24

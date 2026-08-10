@@ -92,7 +92,12 @@ class Monitor:
         # without a strong reference here they are garbage-collected and no
         # updates are ever delivered (channels connect, values stay None).
         self._subs = []
+        self._ctx = None
         self._started = threading.Event()
+        self._last_any_connected = time.time()
+        self._rebuilds = 0
+        self._watchdog_s = float(os.environ.get("TSRS_CA_WATCHDOG_S", "60"))
+        self._lock = threading.Lock()
 
     def start(self):
         if self.backend == "caproto":
@@ -104,6 +109,73 @@ class Monitor:
                              % self.backend)
         self._started.set()
         log.info("monitoring %d channels via %s", len(self.names), self.backend)
+        if self._watchdog_s > 0:
+            t = threading.Thread(target=self._watchdog, name="ca-watchdog",
+                                 daemon=True)
+            t.start()
+
+    # -- watchdog ------------------------------------------------------------
+    def _watchdog(self):
+        """Rebuild the CA client if it stops seeing anything at all.
+
+        A CA client can wedge in ways that never recover on their own -- e.g.
+        caproto's search-retry thread dies on a transient DNS failure, after
+        which no channel is ever searched for again. The panel fails loud (all
+        NO DATA), which is safe, but it would stay that way until a human
+        noticed and restarted the service.
+
+        Rebuilding is cheap and harmless when the IOC really is down: we simply
+        keep retrying. The trigger is deliberately "zero channels connected for
+        a sustained period", never a partial outage -- some channels being down
+        is a plant condition, not a client fault.
+        """
+        while True:
+            time.sleep(min(10.0, max(1.0, self._watchdog_s / 4)))
+            try:
+                if any(r.connected for r in self._cache.values()):
+                    self._last_any_connected = time.time()
+                    continue
+                idle = time.time() - self._last_any_connected
+                if idle < self._watchdog_s:
+                    continue
+                log.error("no CA channel connected for %.0fs -- rebuilding %s "
+                          "client (rebuild #%d)", idle, self.backend,
+                          self._rebuilds + 1)
+                self._rebuild()
+            except Exception:
+                log.exception("watchdog iteration failed")
+
+    def _rebuild(self):
+        with self._lock:
+            self._rebuilds += 1
+            self._last_any_connected = time.time()
+            try:
+                self._teardown()
+            except Exception:
+                log.exception("teardown during rebuild failed (continuing)")
+            try:
+                if self.backend == "caproto":
+                    self._start_caproto()
+                else:
+                    self._start_pyepics()
+            except Exception:
+                log.exception("rebuild failed; will retry on next watchdog tick")
+
+    def _teardown(self):
+        for pv in self._pvs:
+            try:
+                pv.disconnect()
+            except Exception:
+                pass
+        self._pvs = []
+        self._subs = []
+        self._caproto_pvs = {}
+        if self._ctx is not None:
+            try:
+                self._ctx.disconnect()
+            except Exception:
+                pass
+            self._ctx = None
 
     def _start_pyepics(self):
         import epics  # imported here so the module can be introspected without CA
@@ -145,6 +217,10 @@ class Monitor:
                 val = None
             self._store(name, val, True, int(sev or 0))
         return cb
+
+    @property
+    def rebuilds(self):
+        return self._rebuilds
 
     def _store(self, name, value, connected, severity):
         prev = self._cache.get(name) or Reading()
@@ -256,7 +332,8 @@ def healthz():
         else s.heartbeat.dict()
     return {"ok": True, "backend": monitor.backend,
             "ca_connected": s.connected, "ca_total": s.total,
-            "ca_ok": s.connected == s.total, "heartbeat": hb}
+            "ca_ok": s.connected == s.total,
+            "ca_rebuilds": monitor.rebuilds, "heartbeat": hb}
 
 
 if STATIC.is_dir():
