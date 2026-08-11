@@ -2,7 +2,19 @@
 #
 # The build itself is ci.yml, called as a reusable workflow, so a release runs
 # exactly the checks every commit runs. This file adds only what is specific to
-# releasing: resolve the version, register the RPM, tag.
+# releasing: resolve the version, register the RPM, publish, tag.
+#
+# Publishing follows the gemini-rtsw-ci contract: build legs push per-package
+# scratch tags with `upload-rpm.sh --tag-only`, then ONE job rebuilds
+# rpm-repo:latest from the full tag set. We call their publish.yml for that
+# rather than running sync_repo.sh ourselves -- it frees ~30-40GB of runner disk
+# first, which assembling the multi-GB yum image needs.
+#
+# We do NOT use gemini-rtsw-ci's build_rpm.sh / submodule. That path exists for
+# EPICS packages that pull build dependencies out of rpm-repo and ship an EL8/EL9
+# dev image; this package is noarch with no build deps, and our verify-rpm.sh
+# asserts things generic to none of that (image pin, site resolution, upgrade
+# keeping /etc/sysconfig). Publishing is shared; building is not.
 #
 # Actions -> release -> Run workflow. No inputs: the version comes from
 # `%global specver` in packaging/tsrs-screen.spec, so it is bumped in a commit
@@ -88,9 +100,8 @@ jobs:
           name: tsrs-screen-rpm
           path: rpmout
 
-      # RPM_REPO_TOKEN is only needed if gemini-rtsw-repo is private; the
-      # built-in token cannot check out another private repo. For a public one
-      # it is unnecessary.
+      # Cloned over https with the built-in token: gemini-rtsw-ci's publish.yml
+      # does the same, so a public gemini-rtsw-repo needs no extra secret.
       - uses: actions/checkout@v4
         with:
           repository: gemini-rtsw/gemini-rtsw-repo
@@ -98,31 +109,42 @@ jobs:
           token: ${{ secrets.RPM_REPO_TOKEN || github.token }}
 
       # GITHUB_TOKEN, not a PAT: write to the rpm-repo package is granted to
-      # this repository in gemini-rtsw-repo's package settings, the same way
-      # every other repo publishing there works.
+      # this repository in the package's "Manage Actions access" settings, as
+      # gemini-rtsw-ci's README requires for every repo publishing there.
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Full upload, not --tag-only: it pushes the scratch tag and then runs
-      # sync_repo.sh to republish :latest. Dispatching gemini-rtsw-repo's own
-      # rebuild-latest workflow would need a PAT, since GITHUB_TOKEN cannot
-      # trigger workflows in another repository. One RPM per release, so the
-      # concurrent-publish race their README warns about does not apply, and
-      # sync_repo.sh is written to stay inside a runner's disk.
-      - name: Register and publish the RPM
+      # --tag-only per the gemini-rtsw-ci contract: the scratch tag is the
+      # durable source of truth, and publish-latest below is the single writer
+      # of :latest.
+      - name: Register the RPM
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
-        run: ./rpmrepo/upload-rpm.sh rpmout/tsrs-screen-${{ needs.version.outputs.version }}-*.rpm
+        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/tsrs-screen-${{ needs.version.outputs.version }}-*.rpm
 
-      # Tagged last, so a tag always means "this shipped" rather than "this was
-      # attempted". Pushed with GITHUB_TOKEN, which deliberately does not
-      # re-trigger workflows.
+  # Single writer of rpm-repo:latest, shared with every other gemini-rtsw repo.
+  # Frees runner disk before assembling the multi-GB yum image.
+  publish-latest:
+    needs: publish
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@main
+    secrets: inherit
+
+  # Tagged only once the RPM is actually served, so a tag means "this shipped"
+  # rather than "this was attempted". GITHUB_TOKEN deliberately does not
+  # re-trigger workflows, so this cannot loop.
+  tag:
+    needs: [version, publish-latest]
+    if: needs.version.outputs.tagged != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
       - name: Tag the release
-        if: needs.version.outputs.tagged != 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

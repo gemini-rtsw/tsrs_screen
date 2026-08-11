@@ -225,11 +225,17 @@ Same scripts locally — green laptop, green pipeline:
 Both run in a pinned `rockylinux:9.3` with `--platform linux/amd64`, so an Apple
 Silicon laptop builds the same package as the runner.
 
-Publishing uses the built-in `GITHUB_TOKEN`: write access to the `rpm-repo`
-package is granted to this repository in `gemini-rtsw-repo`'s package settings,
-as for every other repo publishing there. An `RPM_REPO_TOKEN` secret is only
-needed if `gemini-rtsw-repo` becomes private, since the built-in token cannot
-check out another private repo.
+Publishing follows the `gemini-rtsw-ci` contract: push the per-package scratch
+tag with `upload-rpm.sh --tag-only`, then call their reusable `publish.yml` as
+the single writer of `rpm-repo:latest`. Uses the built-in `GITHUB_TOKEN` —
+this repo needs **Write** on the `rpm-repo` package under *Manage Actions
+access*. `RPM_REPO_TOKEN` is only needed if `gemini-rtsw-repo` goes private.
+
+We deliberately do **not** use `gemini-rtsw-ci`'s `build_rpm.sh` submodule: that
+path is for EPICS packages pulling build deps from `rpm-repo` and shipping EL8/9
+dev images. This package is noarch with no build deps, and `verify-rpm.sh`
+asserts things specific to it (image pin, site resolution, upgrade preserving
+`/etc/sysconfig`). Publishing is shared; building is not.
 
 ## Compliance findings
 
