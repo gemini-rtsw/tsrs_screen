@@ -192,13 +192,19 @@ python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS nee
 ## Releasing
 
 1. Bump `%global specver` in `packaging/tsrs-screen.spec`, commit, merge.
-2. **Actions → release → Run workflow.**
+2. Then any one of:
+   - **Actions → release → Run workflow**
+   - `git tag v0.1.0 && git push origin v0.1.0` (must match `specver`)
+   - `./packaging/release.sh` — same steps, same scripts, from a laptop
 
-No inputs — the version comes from the spec, so nobody types it twice. The run
-builds the image, the RPM pinned to it, publishes to `gemini-rtsw-repo`, and
-tags `v<version>`. It refuses if that version is already released, or if
-`specver` contains anything but digits and dots (`-` is RPM's version/release
-separator).
+No version is ever typed: it comes from the spec, so the RPM version, image tag
+and git tag cannot disagree. Each path builds the image, the RPM pinned to it,
+publishes to `gemini-rtsw-repo` and tags `v<version>`. All refuse a version
+that is already released, or a `specver` with anything but digits and dots
+(`-` is RPM's version/release separator).
+
+`release.sh --dry-run` prints the plan without changing anything; `--no-image`
+skips the image build.
 
 `ci` runs on every push: builds and verifies a `0.1.0` RPM as an artifact,
 publishes nothing.

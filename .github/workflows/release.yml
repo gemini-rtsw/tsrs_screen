@@ -5,10 +5,15 @@
 # and reviewed like anything else. Typing it here would be a second copy to get
 # out of sync with the spec.
 #
-# To release: bump specver, merge, run this.
+# Also triggered by pushing v<specver> -- from a shell, or by
+# packaging/release.sh, which runs the same steps locally.
+#
+# To release: bump specver, merge, then either run this workflow or push the tag.
 name: release
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
 env:
@@ -32,11 +37,22 @@ jobs:
           [ -n "$V" ] || { echo "::error::no specver in packaging/tsrs-screen.spec"; exit 1; }
           echo "$V" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || {
             echo "::error::specver '$V' must be digits and dots. rpmbuild treats '-' as the version/release separator."; exit 1; }
-          # Re-releasing a version would republish the same NVRA, which dnf does
-          # not see as an upgrade -- it would look successful and change nothing
-          # on the hosts. Fail here instead.
-          if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
-            echo "::error::v$V is already released. Bump specver in packaging/tsrs-screen.spec."; exit 1; fi
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              # Triggered by a tag: it must agree with the spec, or the RPM
+              # version and the tag would describe different things.
+              T="${GITHUB_REF_NAME#v}"
+              [ "$T" = "$V" ] || {
+                echo "::error::tag v$T does not match specver $V in packaging/tsrs-screen.spec"; exit 1; }
+              echo "tagged=true" >> "$GITHUB_OUTPUT" ;;
+            *)
+              # Re-releasing a version would republish the same NVRA, which dnf
+              # does not see as an upgrade -- it would look successful and change
+              # nothing on the hosts. Fail here instead.
+              if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+                echo "::error::v$V is already released. Bump specver in packaging/tsrs-screen.spec."; exit 1; fi
+              echo "tagged=false" >> "$GITHUB_OUTPUT" ;;
+          esac
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "Releasing **$V**" >> "$GITHUB_STEP_SUMMARY"
 
@@ -102,6 +118,7 @@ jobs:
       # attempted". Pushed with GITHUB_TOKEN, which deliberately does not
       # re-trigger workflows.
       - name: Tag the release
+        if: steps.v.outputs.tagged != 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
