@@ -14,128 +14,168 @@ entrance) and **REQ-TSRS-0211** (dedicated EPICS copy of that screen).
 
 ## Deploy to production
 
-Target: an **x86_64** host on the control network, running the Docker daemon.
-Best placed on the display node itself, so the failure domain stays what it is
-today — one box.
+Target: an **x86_64** host running the Docker daemon. Best placed on the display
+node itself, so the failure domain stays what it is today — one box.
+
+### 1. Find your IOC
+
+**Nothing below is a constant.** The IOC host, its address, and the site details
+differ between Gemini North and South, and will change again as machines are
+replaced. Establish these four facts first; everything else follows from them.
+
+| Fact | How to get it | Example (GN, Aug 2026) |
+|---|---|---|
+| IOC hostname | ask controls, or `grep` the old CS-Studio launcher | `mkosioc-lv1` |
+| IOC address | `getent hosts <ioc-host>` | `10.2.2.49` |
+| Its subnet + broadcast | `ip -br addr show` **on the IOC host** | `10.2.2.0/24`, bcast `10.2.2.255` |
+| Panel host's subnet | `ip -br addr show` on the panel host | `10.2.71.0/24` — *different* |
+
+Confirm the IOC really serves the channels, from the panel host, before
+installing anything:
 
 ```bash
-# 1. Authenticate to GHCR (or make the package public in repo → Packages)
-docker login ghcr.io -u <gh-user>          # PAT with read:packages
-
-# 2. Install the service
-sudo curl -fsSL -o /etc/systemd/system/tsrs-web.service \
-  https://raw.githubusercontent.com/gemini-rtsw/tsrs_screen/main/deploy/tsrs-web.service
-sudoedit /etc/systemd/system/tsrs-web.service    # pick the CA addressing block -- see below
-sudo systemctl daemon-reload
-sudo systemctl enable --now tsrs-web
-
-# 3. Verify: want ca_with_values == ca_total
-curl -s localhost:8090/api/healthz | python3 -m json.tool
+python3 tools/ca_probe.py <ioc-ip> bfo:mcsStatus
 ```
 
-Then browse to `http://localhost:8090`.
+`FOUND` means you are done here. `NOT_FOUND` or `NO REPLY` — see *Reaching the
+IOC* below; the tool prints which case you are in.
+
+### 2. Install
 
 ```bash
+# Authenticate to GHCR (or make the package public in repo → Packages)
+docker login ghcr.io -u <gh-user>          # PAT with read:packages
+
+sudo curl -fsSL -o /etc/systemd/system/tsrs-web.service \
+  https://raw.githubusercontent.com/gemini-rtsw/tsrs_screen/main/deploy/tsrs-web.service
+sudoedit /etc/systemd/system/tsrs-web.service   # set the CA block + TSRS_PORT
+sudo systemctl daemon-reload
+sudo systemctl enable --now tsrs-web
+```
+
+Podman hosts: use `deploy/tsrs-web.container` (Quadlet) in
+`/etc/containers/systemd/` instead. One unit or the other, never both.
+
+### 3. Verify
+
+```bash
+curl -s localhost:8090/api/healthz | python3 -m json.tool   # ca_with_values == ca_total
 systemctl status tsrs-web
 journalctl -u tsrs-web -f
 sudo systemctl stop tsrs-web       # rollback; nothing else is touched
 ```
 
-Podman hosts: use `deploy/tsrs-web.container` (Quadlet) in
-`/etc/containers/systemd/` instead. Use one unit or the other, never both.
+Then browse to `http://localhost:8090`. At GN all **76/76** channels connect.
+
+Confirm it survives a reboot — the unit is designed so systemd alone owns the
+container, but verify rather than assume:
+
+```bash
+systemctl is-enabled tsrs-web                                     # enabled
+docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' tsrs-web   # no
+sudo reboot                                                       # the only real proof
+```
+
+If that inspect ever returns `always` or `unless-stopped`, the daemon and
+systemd will fight over the container: the daemon starts one at boot, then
+`ExecStartPre=docker rm -f` kills it and systemd starts its own.
 
 ### Reaching the IOC
 
-The BFO IOC is `bfo-mk-ioc` on **`mkosioc-lv1` = 10.2.2.49**, CA port 5064.
-How you address it depends entirely on which VLAN the panel host is on, and
-getting this wrong is the single most likely reason for `ca_connected: 0`.
+Getting this wrong is the single most likely cause of `ca_connected: 0`, and it
+fails silently — no error, no log line. Which config you need depends only on
+whether the panel host shares a subnet with the IOC.
 
-**On the control VLAN (10.2.2.0/24)** — normal EPICS, use broadcast:
+**Same subnet as the IOC** — normal EPICS, use that subnet's broadcast:
 
 ```
-EPICS_CA_ADDR_LIST="10.2.2.255 10.2.10.21"
+EPICS_CA_ADDR_LIST="<ioc-subnet-broadcast>"     # GN: 10.2.2.255
 EPICS_CA_AUTO_ADDR_LIST=YES
 ```
 
-**Off the control VLAN** (e.g. `mkoswgdkr-lv1`, 10.2.71.15) — use TCP name
-resolution and do *not* set `EPICS_CA_ADDR_LIST` at all:
+The shipped units carry a second GN entry, `10.2.10.21`, of unconfirmed
+purpose — it predates this work and is unreachable from off-VLAN hosts. Extra
+entries are additive and harmless; leave it unless someone can say what it is.
+
+**Different subnet** — use TCP name resolution, and do *not* set
+`EPICS_CA_ADDR_LIST` at all:
 
 ```
-EPICS_CA_NAME_SERVERS=10.2.2.49:5064
+EPICS_CA_NAME_SERVERS=<ioc-ip>:5064             # GN: 10.2.2.49:5064
 EPICS_CA_AUTO_ADDR_LIST=NO
 ```
 
-Two traps here, both of which cost a day:
+Two traps, both of which cost a day:
 
-1. **`10.2.2.255` is a broadcast and does not route.** From another subnet it
-   simply never arrives, and CA reports nothing — no error, no log line.
-2. **Unicast UDP to `10.2.2.49` does not work either**, which is the
-   counter-intuitive part. `mkosioc-lv1` runs *two* IOCs, `bfo-mk-ioc` and
-   `toptica-mk-ioc`. Both bind UDP 5064 with `SO_REUSEADDR`. A broadcast
-   datagram is delivered to every such socket; a **unicast** datagram is
-   delivered to only one — in practice toptica, which correctly answers
-   `CA_PROTO_NOT_FOUND` for every `bfo:` channel. The failure looks exactly
+1. **A broadcast address does not route.** From another subnet `10.2.2.255`
+   never arrives. Directed broadcast is disabled on routers as a matter of
+   course, so this is not something to request an exception for.
+2. **Unicast UDP to the IOC's address does not reliably work either** — the
+   counter-intuitive one. An IOC *host* often runs several IOCs (GN's
+   `mkosioc-lv1` runs both `bfo-mk-ioc` and `toptica-mk-ioc`), and they all bind
+   UDP 5064 with `SO_REUSEADDR`. A broadcast datagram reaches every such socket;
+   a **unicast** datagram reaches only one. If that one is the wrong IOC it
+   answers `CA_PROTO_NOT_FOUND` for every `bfo:` channel — which looks exactly
    like a firewall problem and is not one.
 
-TCP name resolution avoids trap 2 because only one process can hold TCP 5064,
-and on `mkosioc-lv1` that is `bfo-mk-ioc` (verified 2026-08-11, pid 25611).
-
-**That last point is a known fragility, not a design.** TCP 5064 goes to
-whichever IOC starts first. If both restart and toptica wins, the panel goes to
-NO DATA and nothing in the log says why. The durable fix is a pinned
-`EPICS_CAS_SERVER_PORT` for `bfo-mk-ioc`, which is an IOC-side change owned by
-whoever runs `mkosioc-lv1`. Until then, prefer deploying on the control VLAN.
-
-Firewall for off-VLAN hosts: TCP 5064 (search *and* data) plus UDP 5065
-(beacons) to 10.2.2.49. The UDP rule must be stateful — search replies return
-to an ephemeral source port, not to 5064, so a rule pinned to 5064/5065 on both
-ends silently drops them.
-
-Gemini South: change these addresses for the CP site.
-
-To verify addressing before touching the unit:
+TCP name resolution sidesteps trap 2: only one process can hold TCP 5064, and at
+GN that is `bfo-mk-ioc`. Check on any new IOC host with:
 
 ```bash
-docker run --rm --network host \
-  -e EPICS_CA_NAME_SERVERS=10.2.2.49:5064 -e EPICS_CA_AUTO_ADDR_LIST=NO \
-  ghcr.io/gemini-rtsw/tsrs_screen:latest \
-  python -c "import epics; pv=epics.PV('bfo:mcsStatus'); print(pv.wait_for_connection(timeout=10), pv.get())"
+ss -lntup | grep 5064        # who owns TCP 5064 -- must be the BFO IOC
 ```
 
-Port 8090 in the shipped unit (8080 was already taken on `mkoswgdkr-lv1`).
-`--network host` means **no port isolation**, so on a shared docker host
-something may already hold it — the gateway then exits 1 with "address already
-in use". Check with `ss -ltnp` and set `TSRS_PORT` (and `TSRS_BIND`, default
-`127.0.0.1` in the unit) to something free.
+**This is a known fragility, not a design.** TCP 5064 goes to whichever IOC
+starts first; if the other one wins after a restart, the panel goes to NO DATA
+with nothing in the log. The durable fix is a pinned `EPICS_CAS_SERVER_PORT` for
+the BFO IOC — an IOC-side change owned by whoever runs that host. Prefer
+deploying on the IOC's own subnet where this cannot arise.
+
+**Firewall**, cross-subnet only: TCP 5064 (search *and* data) and UDP 5065
+(beacons) to the IOC. The UDP rule **must be stateful** (conntrack /
+`ESTABLISHED,RELATED`) — search replies come back to an ephemeral source port,
+not to 5064, so a rule pinned to 5064/5065 at both ends silently drops them.
+`tools/ca_probe.py` prints the source port it used, which is the concrete thing
+to hand a network admin.
+
+### Other sites and future IOCs
+
+The addresses above are GN as of August 2026. Also site-specific, and *not*
+currently configurable:
+
+- **The `bfo:` PV prefix is baked into `tsrs_indicators.csv`,
+  `compliance_additions.csv`, and `tsrs.config.json`** (`mode_pvs`,
+  `overview_order`). A site using a different prefix needs those regenerated
+  from its own `.opi` files via `tools/extract_opi.py`, not a config flag.
+- `subtitle` in `tsrs.config.json` says "Gemini North".
+- Gemini South deploys `cssapp` too (the `CP` branch in `lhandset.sh`), so it is
+  plausibly in scope — confirm before sizing a rollout.
+
+Changing the IOC address is just the unit file; changing the *telescope* means
+regenerating the CSVs.
 
 ### Five things that will bite you
 
 1. **`--network host` is required, not preferred.** CA name resolution and IOC
    beacons do not survive a bridged/NAT network. On bridge networking the panel
-   sits at NO DATA forever with nothing in the log to explain why. See
-   "Reaching the IOC" above — addressing is the most common deployment failure.
-2. **x86_64 only.** pyepics ships an x86-64 `libca`; on arm the container
-   starts and then dies on the first CA call.
-3. **Never run the simulator on the control network.** It serves the same 68
+   sits at NO DATA forever with nothing in the log to explain why.
+2. **Port conflicts are silent until start.** `--network host` means no port
+   isolation. The unit ships `TSRS_PORT=8090` because 8080 was already taken by
+   another container on the GN host; the gateway exits 1 with "address already
+   in use". Check `ss -ltnp` first and set `TSRS_PORT` to something free.
+3. **x86_64 only.** pyepics ships an x86-64 `libca`; on arm the container starts
+   and then dies on the first CA call.
+4. **Never run the simulator on the control network.** It serves the same
    channel names — duplicates break CA name resolution for the real screen too.
    `docker-compose` is for laptops.
-4. **Parallel-run it first.** Leave CS-Studio running and compare the 11 summary
-   LEDs side by side. Both are read-only, so there is no cutover risk, and it is
-   the only real correctness check available.
 5. **`docker pull` in the unit runs as root**, which has no GHCR credentials
-   even if your own user does. Harmless while the image is present locally (the
-   `-` prefix tolerates the failure), but auto-update on restart will not work
-   until the package is public or root is logged in.
+   even if your own user does. The `-` prefix tolerates the failure so a local
+   image still starts, but **unattended reboots will not pick up new images**.
+   Run `sudo docker login ghcr.io` once, or make the package public.
 
-### Expect up to five channels not to connect
-
-`bfo:cond1bits.B7/.B9/.BA`, `bfo:cond2bits.B2`, `bfo:cond5bits.B4` are the
-compliance additions below. They have never appeared on a screen, so this is the
-first time anything has asked the IOC for them. If they do not connect, that is a
-real finding — the design specifies them but the IOC does not publish them,
-turning a display fix into an IOC change. Set `include_compliance_additions:
-false` in `tsrs.config.json` and re-run `tools/gen_panel.py` to drop them
-meanwhile.
+**Parallel-run before cutover.** Leave CS-Studio running and compare the summary
+LEDs side by side. Both are read-only, so there is no cutover risk, and it is
+the only real correctness check available.
 
 ## Local development
 
@@ -240,7 +280,9 @@ bfo:cond{N}bits.B{h}  ⇔  PLC B3/(64 + (N-1)*16 + h)
 Three gaps between the 2015 design and the as-built screen. The first two are
 closed by `compliance_additions.csv` (kept separate from the as-built map so
 "as-built" and "proposed" never blur); every PV it uses already exists in the
-`bfo` condition words, so no IOC change is needed.
+`bfo` condition words, so no IOC change is needed. Confirmed against the real
+IOC on 2026-08-11: all 76 channels connect, including the five additions that
+had never appeared on a screen.
 
 **1. LOTO drill-down is incomplete — the significant one.** `LOTO OK` (`B3/264`)
 is fed by seven bits; `loto_detail` displays four. Missing: bottom shutter,
@@ -321,6 +363,7 @@ the Gemini `epics-base` instead of the bundled libca, install it and set
 ```
 tools/extract_opi.py          .opi -> tsrs_indicators.csv
 tools/gen_panel.py            CSVs -> static/ + gateway/channels.json
+tools/ca_probe.py             "does this host serve this PV?" -- no EPICS needed
 tools/plc_bits_from_xlsx.py   design spreadsheet -> reference/*.csv
 gateway/tsrs_web/app.py       FastAPI + CA monitors (read-only)
 sim/tsrs_sim.py               caproto soft IOC serving the 76 channels
