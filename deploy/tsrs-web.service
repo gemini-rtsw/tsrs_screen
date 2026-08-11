@@ -1,0 +1,51 @@
+# systemd unit for the TSRS panel gateway on a Docker-daemon host.
+# (deploy/tsrs-web.container is the podman/Quadlet equivalent -- use one, not both.)
+#
+# Install:  sudo cp deploy/tsrs-web.service /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now tsrs-web
+#
+# Runs docker in the foreground with --rm so systemd owns the lifecycle: no
+# --restart=always, or the daemon and systemd both try to manage restarts and
+# `systemctl stop` leaves the container running.
+#
+# --network host is REQUIRED, not a preference. EPICS_CA_ADDR_LIST below is a
+# *broadcast* address; CA name resolution and IOC beacons do not survive a
+# bridged/NAT network. On bridge networking the panel sits at NO DATA forever
+# with nothing in the log to explain it.
+
+[Unit]
+Description=TSRS status panel gateway (read-only EPICS CA bridge)
+Documentation=https://github.com/gemini-rtsw/tsrs_screen
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=0
+
+Environment=IMAGE=ghcr.io/gemini-rtsw/tsrs_screen:latest
+
+# Pull is best-effort: a registry outage must not stop a working local image
+# from starting. Drop the '-' prefix if you would rather fail loudly.
+ExecStartPre=-/usr/bin/docker pull ${IMAGE}
+ExecStartPre=-/usr/bin/docker rm -f tsrs-web
+
+ExecStart=/usr/bin/docker run --rm --name tsrs-web \
+  --network host \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  -e TSRS_CA_BACKEND=pyepics \
+  -e EPICS_CA_ADDR_LIST="10.2.2.255 10.2.10.21" \
+  -e EPICS_CA_AUTO_ADDR_LIST=YES \
+  -e EPICS_CA_MAX_ARRAY_BYTES=160000 \
+  -e TSRS_CA_WATCHDOG_S=60 \
+  -e TSRS_LOGLEVEL=INFO \
+  ${IMAGE}
+
+ExecStop=/usr/bin/docker stop -t 10 tsrs-web
+
+[Install]
+WantedBy=multi-user.target

@@ -154,9 +154,16 @@ sizing the rollout. Gemini South also deploys `cssapp` (the `CP` branch in
 
 ## Deployment
 
-`deploy/tsrs-web.container` is a podman Quadlet unit for EL9. Install to
-`/etc/containers/systemd/`, `systemctl daemon-reload`, `systemctl start
-tsrs-web`.
+Two units are provided -- use one, not both:
+
+| Host runtime | Unit | Install |
+|---|---|---|
+| **Docker daemon** | `deploy/tsrs-web.service` | `cp` to `/etc/systemd/system/`, `systemctl enable --now tsrs-web` |
+| podman (EL9) | `deploy/tsrs-web.container` | `cp` to `/etc/containers/systemd/`, `systemctl daemon-reload && systemctl start tsrs-web` |
+
+The Docker unit runs `docker run --rm` in the foreground rather than
+`--restart=always`, so systemd owns the lifecycle; with both, `systemctl stop`
+leaves the container running.
 
 Two things there are load-bearing:
 
