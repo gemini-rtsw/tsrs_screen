@@ -212,15 +212,11 @@ OUT=$PWD/rpms ./packaging/verify-rpm.sh
 version's image, `GEMINI_SITE` resolves, and an upgrade preserves
 `/etc/sysconfig`.
 
-⚠️ **The application image is not built by CI.** The RPM pins
-`tsrs_screen:<specver>`, and nothing publishes that tag — the shared pipeline
-builds RPMs and EPICS dev images, not application images. Build and push it
-before releasing a new `specver`:
-
-```bash
-docker build --platform linux/amd64 -t ghcr.io/gemini-rtsw/tsrs_screen:<specver> .
-docker push ghcr.io/gemini-rtsw/tsrs_screen:<specver>
-```
+The application image is built and pushed by the same run, from `app_image:
+Dockerfile`, tagged `:<specver>`, `:<specver>-git<hash>` and `:latest` — the tag
+comes from the spec, so the image and the RPM cannot drift. It is pushed
+*before* the RPM registers, so a published RPM can never pin an image that does
+not exist.
 
 Publishing uses the built-in `GITHUB_TOKEN`; this repo needs **Write** on the
 `rpm-repo` package under *Manage Actions access*.

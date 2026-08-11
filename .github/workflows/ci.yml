@@ -13,6 +13,7 @@ jobs:
       el_version: '9'
       profile: lightweight
       spec_path: packaging/tsrs-screen.spec
+      app_image: Dockerfile
       verify_cmd: OUT=$PWD/rpms ./packaging/verify-rpm.sh
 
   # Rebuilds rpm-repo:latest ONCE after all EL legs have pushed their
