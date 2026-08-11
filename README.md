@@ -191,8 +191,17 @@ python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS nee
 
 ## Releasing
 
-`git tag v1.2.0 && git push --tags`. CI builds the image, then the RPM pinned to
-that same tag, and registers it with `gemini-rtsw-repo`.
+**Actions → build → Run workflow**, enter a version (`0.1.0`), run. Or
+`git tag v0.1.0 && git push origin v0.1.0`. Either way CI builds the image, the
+RPM pinned to that same tag, registers it with `gemini-rtsw-repo`, and (from the
+UI path) tags the commit afterwards.
+
+Version must be digits and dots — `rpmbuild` treats `-` as the version/release
+separator, so `0.1.0-rc1` is rejected. Bump rather than reuse: `dnf` does not
+see a rebuild of the same NVRA as an upgrade.
+
+Nothing is published unless it's a `v*` tag or a dispatch with a version. Pushes
+and PRs build a `0.0.0` RPM as a workflow artifact only.
 
 CI **calls the same two scripts** you run locally, so a green laptop means a
 green pipeline:
@@ -202,10 +211,9 @@ green pipeline:
 ./packaging/verify-rpm.sh 1.2.0    # install, pin, upgrade/downgrade, unit parse
 ```
 
-Every push builds, verifies and uploads the RPM as a workflow artifact; only
-`v*` tags publish it to the repo. Untagged builds are version `0.0.0` and pin an
-image tag that was never published — they exist to prove the packaging works,
-**not to install**. Both run in a pinned `rockylinux:9.3` container
+Dev builds are version `0.0.0` and pin an image tag that was never published —
+they prove the packaging works, they are **not installable**. Both scripts run in
+a pinned `rockylinux:9.3` container
 with `--platform linux/amd64`, so an Apple Silicon laptop produces the same
 package as the runner. `verify-rpm.sh` builds a `+1` version itself to test that
 an upgrade moves the image pin while `/etc/sysconfig/tsrs-web` survives.
