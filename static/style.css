@@ -12,6 +12,16 @@
   --warn: #b35c00;
 }
 * { box-sizing: border-box; }
+
+/* Must come before any rule that sets `display`, and must stay !important.
+   Visibility of the NO DATA banner and of all 12 screens is driven purely by
+   the `hidden` attribute from app.js. An author `display` declaration beats the
+   UA stylesheet's `[hidden] { display: none }` no matter the specificity, so
+   without this guard `.linkdown { display: flex }` pins the red banner on
+   screen forever -- including when the gateway is perfectly healthy. That is
+   the worst possible failure for an annunciator: it trains operators to ignore
+   the one alarm the display exists to raise. */
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg); color: var(--fg);
