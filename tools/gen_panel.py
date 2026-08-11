@@ -13,6 +13,7 @@ two can never drift.  Re-run after editing either CSV.
     python3 tools/gen_panel.py
 """
 import csv
+import hashlib
 import html
 import json
 import pathlib
@@ -97,6 +98,19 @@ def led(r):
          html.escape(r["label"] or r["pv"]))
 
 
+def asset_version(text):
+    """Content hash for cache-busting.
+
+    The panel is a wall display: nobody hard-refreshes it, and a kiosk browser
+    will happily serve a cached style.css or app.js for weeks after a deploy.
+    That is how a fixed NO DATA banner stayed on screen after the fix shipped.
+    Hashing the content means the URL changes if and only if the asset does, so
+    a `docker pull` + restart is genuinely all a deploy needs -- and the drift
+    check stays deterministic, unlike a timestamp or build number.
+    """
+    return hashlib.sha256(text.encode()).hexdigest()[:8]
+
+
 def render_html(cfg, by_screen):
     parts = []
     for screen, items in sorted(by_screen.items(), key=lambda kv: kv[0] != "overview"):
@@ -116,6 +130,8 @@ def render_html(cfg, by_screen):
         title=html.escape(cfg["title"]),
         subtitle=html.escape(cfg.get("subtitle", "")),
         screens="\n".join(parts),
+        cssver=asset_version(STYLE),
+        jsver=asset_version(render_js(cfg)),
     )
 
 
@@ -129,7 +145,7 @@ TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title}</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v={cssver}">
 <body>
 <div id="linkdown" class="linkdown" hidden>
   <strong>NO DATA FROM GATEWAY</strong>
@@ -145,7 +161,7 @@ TEMPLATE = """<!doctype html>
   <span class="sep">|</span>
   <span id="stamp"></span>
 </footer>
-<script src="app.js"></script>
+<script src="app.js?v={jsver}"></script>
 </body>
 """
 
