@@ -29,10 +29,16 @@ RPM="$OUT/tsrs-screen-$VERSION-1.el9.noarch.rpm"
 # The upgrade test needs a second, higher version. Build it from the same
 # source so the only difference is the version -- which is exactly the thing
 # under test.
+#
+# It goes in a SUBDIRECTORY: it is a test fixture, not a deliverable, and
+# leaving it beside the real package meant anything globbing rpmout/ -- the CI
+# artifact upload, for one -- shipped two RPMs and invited someone to install
+# a version that was never released.
 NEXT="${VERSION%.*}.$(( ${VERSION##*.} + 1 ))"
-if [ ! -f "$OUT/tsrs-screen-$NEXT-1.el9.noarch.rpm" ]; then
-    echo "--- building $NEXT for the upgrade test ---"
-    "$ROOT/packaging/build-rpm.sh" "$NEXT" >/dev/null
+NEXTDIR="$OUT/upgrade-test"
+if [ ! -f "$NEXTDIR/tsrs-screen-$NEXT-1.el9.noarch.rpm" ]; then
+    echo "--- building $NEXT as an upgrade-test fixture ---"
+    OUT="$NEXTDIR" "$ROOT/packaging/build-rpm.sh" "$NEXT" >/dev/null
 fi
 
 echo "--- verifying $VERSION (upgrade target $NEXT) ---"
@@ -53,7 +59,7 @@ docker run --rm --platform linux/amd64 -v "$OUT":/out:ro \
 
         echo "[3] upgrade keeps site edits, moves the pin"
         echo "EPICS_CA_NAME_SERVERS=10.9.9.9:5064  # SITE EDIT" >> /etc/sysconfig/tsrs-web
-        rpm -U --nodeps "/out/tsrs-screen-$N-1.el9.noarch.rpm"
+        rpm -U --nodeps "/out/upgrade-test/tsrs-screen-$N-1.el9.noarch.rpm"
         grep -qx "Environment=IMAGE=$IMG:$N" "$UNIT" \
             || { echo "FAIL: upgrade did not move the pin to $N"; exit 1; }
         grep -q "SITE EDIT" /etc/sysconfig/tsrs-web \
