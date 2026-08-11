@@ -191,29 +191,36 @@ python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS nee
 
 ## Releasing
 
-Bump `%global specver` in `packaging/tsrs-screen.spec` and push. That's it —
-every push to `main` builds the RPM and publishes it to `rpm-repo`.
+Bump `%global specver` in `packaging/tsrs-screen.spec` and push. Every push to
+`main` builds the RPM and publishes it to `rpm-repo`.
 
-The `Release` carries the commit hash (`0.1.0-1.gitc628a3d.el9`), as every
+`Release` carries the commit hash (`0.1.0-1.gitde096e3.el9`), as every
 gemini-rtsw package does, so each build is a distinct NVRA and `rpm -q` names
-the exact commit a host is running. `Version` comes from `specver`, and the
-image tag matches it — the unit pins `tsrs_screen:<specver>`.
+the exact commit a host is running. The unit pins
+`ghcr.io/gemini-rtsw/tsrs_screen:<specver>`.
 
-CI is the standard gemini-rtsw shape: a build hook and a publish hook into
-`gemini-rtsw-ci` (`profile: lightweight` — no EPICS toolchain, no rpm-repo
-dependency container, no dev image), plus one `app` job for the container this
-project ships, which the shared pipeline does not build.
-
-This repo owns no build script. Locally:
+CI is the standard gemini-rtsw pipeline — a build hook and a publish hook into
+`gemini-rtsw-ci`, with `profile: lightweight` (no EPICS toolchain, no rpm-repo
+dependency container, no dev image). This repo owns no build script.
 
 ```bash
 ./gemini-rtsw-ci/build_rpm.sh --el 9 --profile lightweight --spec packaging/tsrs-screen.spec
 OUT=$PWD/rpms ./packaging/verify-rpm.sh
 ```
 
-`verify-rpm.sh` is what `verify_cmd` runs in CI — the checks a generic build
-cannot make: the unit is pinned to this version's image, `GEMINI_SITE` resolves,
-and an upgrade preserves `/etc/sysconfig`.
+`verify-rpm.sh` is what `verify_cmd` runs in CI: the unit is pinned to this
+version's image, `GEMINI_SITE` resolves, and an upgrade preserves
+`/etc/sysconfig`.
+
+⚠️ **The application image is not built by CI.** The RPM pins
+`tsrs_screen:<specver>`, and nothing publishes that tag — the shared pipeline
+builds RPMs and EPICS dev images, not application images. Build and push it
+before releasing a new `specver`:
+
+```bash
+docker build --platform linux/amd64 -t ghcr.io/gemini-rtsw/tsrs_screen:<specver> .
+docker push ghcr.io/gemini-rtsw/tsrs_screen:<specver>
+```
 
 Publishing uses the built-in `GITHUB_TOKEN`; this repo needs **Write** on the
 `rpm-repo` package under *Manage Actions access*.

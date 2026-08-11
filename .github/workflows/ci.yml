@@ -1,166 +1,23 @@
-# Standard gemini-rtsw pipeline: a build hook and a publish hook, plus the one
-# job that cannot live in gemini-rtsw-ci -- this project ships a container, and
-# the shared pipeline builds RPMs and EPICS dev images, not application images.
-#
-# The RPM itself is entirely gemini-rtsw-ci's: profile lightweight, our spec,
-# and verify-rpm.sh for the checks a generic build cannot make.
-name: ci
-
+name: Build
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:
-
-env:
-  IMAGE: ghcr.io/${{ github.repository }}
-
 jobs:
-  # Application: the generated panel must match its CSV source of truth, the CA
-  # liveness path must hold, and the image the RPM pins gets pushed here. Built
-  # once and reused for the smoke test, so nothing is compiled twice.
-  app:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      # The panel and the gateway channel list are both generated from the CSVs.
-      # A CSV edited without regenerating means the display disagrees with its
-      # own indicator map, so fail rather than ship that.
-      - name: Generated output is in sync
-        run: |
-          python3 tools/gen_panel.py
-          git diff --exit-code -- static gateway/channels.json
-
-      - name: Build images
-        run: |
-          docker build -t tsrs-web:ci -f Dockerfile .
-          docker build -t tsrs-sim:ci -f Dockerfile.sim .
-
-      - name: Start stack
-        run: |
-          # Static IP, not a container name: a stopped container leaves
-          # Docker DNS, which kills the CA client's search thread and makes the
-          # reconnect assertion below fail for the wrong reason.
-          docker network create --subnet 172.28.7.0/24 ca
-          docker run -d --name tsrs-sim --network ca --ip 172.28.7.2 \
-            tsrs-sim:ci --chaos 0.08 --period 4
-          # x86_64 runner, so exercise the production pyepics backend here.
-          docker run -d --name tsrs-web --network ca -p 8080:8080 \
-            -e TSRS_CA_BACKEND=pyepics \
-            -e EPICS_CA_ADDR_LIST=172.28.7.2 \
-            -e EPICS_CA_AUTO_ADDR_LIST=NO \
-            tsrs-web:ci
-
-      - name: Wait for steady state
-        run: |
-          # Wait for every channel to be connected AND carrying a value, not
-          # merely for the first connection: pyepics reports connected before
-          # the first monitor update, so asserting values too early is a race.
-          for i in $(seq 1 90); do
-            read n v t <<<"$(curl -sf localhost:8080/api/healthz \
-              | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["ca_connected"],d["ca_with_values"],d["ca_total"])' \
-              2>/dev/null || echo '0 0 0')"
-            echo "t+${i}s connected=$n with_values=$v total=$t"
-            [ "$n" = "76" ] && [ "$v" = "76" ] && exit 0
-            sleep 1
-          done
-          echo "::error::did not reach steady state (connected=$n with_values=$v)"
-          docker logs tsrs-web; exit 1
-
-      - name: Assert full channel set and real values
-        run: |
-          curl -sf localhost:8080/api/status > /tmp/s.json
-          python3 - <<'PY'
-          import json
-          d = json.load(open("/tmp/s.json"))
-          ch = d["channels"]
-          assert d["total"] == d["connected"] == 76, (d["total"], d["connected"])
-          vals = [r["value"] for r in ch.values()]
-          assert all(v is not None for v in vals), "some channels have no value"
-          assert any(v == 0 for v in vals) and any(v == 1 for v in vals), \
-              "expected a mix of Ready/Not Ready from the simulator"
-          modes = [ch["bfo:%sMode" % m]["value"] for m in ("summit", "standby", "base")]
-          assert sum(modes) == 1, "exactly one Observatory Mode PV must read 1: %r" % modes
-          print("ok: 76/76 connected, values present, one mode active")
-          PY
-
-      - name: Assert dead IOC is reported as disconnected
-        run: |
-          docker stop tsrs-sim
-          for i in $(seq 1 45); do
-            n=$(curl -sf localhost:8080/api/healthz \
-                | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_connected"])')
-            [ "$n" = "0" ] && { echo "disconnect detected at t+${i}s"; break; }
-            sleep 1
-          done
-          [ "$n" = "0" ] || { echo "::error::stale channels still reported connected"; exit 1; }
-          # The gateway itself must stay healthy: a dead IOC is not a sick
-          # gateway, and restarting it would drop the panel for no reason.
-          ok=$(curl -sf localhost:8080/api/healthz \
-               | python3 -c 'import json,sys;print(json.load(sys.stdin)["ok"])')
-          [ "$ok" = "True" ] || { echo "::error::gateway reported itself unhealthy"; exit 1; }
-
-      - name: Assert reconnect after IOC returns
-        run: |
-          docker start tsrs-sim
-          for i in $(seq 1 60); do
-            n=$(curl -sf localhost:8080/api/healthz \
-                | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_connected"])')
-            v=$(curl -sf localhost:8080/api/healthz \
-                | python3 -c 'import json,sys;print(json.load(sys.stdin)["ca_with_values"])')
-            [ "$n" = "76" ] && [ "$v" = "76" ] && { echo "reconnected at t+${i}s"; exit 0; }
-            sleep 1
-          done
-          echo "::error::did not reconnect"; docker logs tsrs-web; exit 1
-
-      - name: Gateway logs
-        if: always()
-        run: docker logs tsrs-web 2>&1 | tail -40
-
-      - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # The tag the RPM unit pins comes from the spec, so the image and the
-      # package always name the same thing. Pushed only after the smoke test
-      # above has passed against this exact image.
-      - name: Push image
-        if: github.event_name != 'pull_request'
-        run: |
-          V=$(awk '/^%global specver/ {print $3}' packaging/tsrs-screen.spec)
-          docker tag tsrs-web:ci "$IMAGE:$V"
-          docker tag tsrs-web:ci "$IMAGE:latest"
-          docker push "$IMAGE:$V"
-          docker push "$IMAGE:latest"
-
-  # ---- gemini-rtsw-ci hook 1: build the RPM -------------------------------
   build:
-    needs: app
     uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@lightweight
     secrets: inherit
     with:
       scripts_dir: gemini-rtsw-ci
-      el_version: "9"
+      el_version: '9'
       profile: lightweight
       spec_path: packaging/tsrs-screen.spec
       verify_cmd: OUT=$PWD/rpms ./packaging/verify-rpm.sh
 
-  # ---- gemini-rtsw-ci hook 2: publish rpm-repo:latest ---------------------
+  # Rebuilds rpm-repo:latest ONCE after all EL legs have pushed their
+  # scratch tags. Without this job the RPM never lands in the served repo.
   publish:
     needs: build
-    if: github.event_name != 'pull_request'
     uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@lightweight
     secrets: inherit
