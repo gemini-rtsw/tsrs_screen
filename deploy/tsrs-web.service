@@ -1,53 +1,32 @@
 # systemd unit for the TSRS panel gateway on a Docker-daemon host.
 # (deploy/tsrs-web.container is the podman/Quadlet equivalent -- use one, not both.)
 #
-# Install:  sudo cp deploy/tsrs-web.service /etc/systemd/system/
+# Install:  docker run --rm --user 0 -v /etc/systemd/system:/out \
+#             ghcr.io/gemini-rtsw/tsrs_screen:latest \
+#             cp /app/deploy/tsrs-web.service /out/tsrs-web.service
 #           sudo systemctl daemon-reload && sudo systemctl enable --now tsrs-web
+#           (target hosts reach GHCR but not github.com, so the unit ships in
+#            the image; `sudo systemctl edit --force --full tsrs-web` also works)
 #
-# Runs docker in the foreground with --rm so systemd owns the lifecycle: no
-# --restart=always, or the daemon and systemd both try to manage restarts and
-# `systemctl stop` leaves the container running.
+# Read "Deploy to production" in README.md before editing anything below.
 #
-# --network host means NO PORT ISOLATION: if the host already has something on
-# TSRS_PORT the gateway exits 1 with "address already in use". On a shared
-# docker host, check with `ss -ltnp` and set TSRS_PORT to something free.
-# TSRS_PORT=8090 below, not the documented default 8080, because 8080 was
-# already taken on mkoswgdkr-lv1.
+# --network host is REQUIRED. CA name resolution and IOC beacons do not survive
+# a bridged/NAT network; on bridge networking the panel sits at NO DATA forever
+# with nothing in the log. It also means NO PORT ISOLATION -- TSRS_PORT=8090
+# here because 8080 was already taken on the GN host. Check `ss -ltnp` first.
 #
-# --network host is REQUIRED, not a preference. CA name resolution and IOC
-# beacons do not survive a bridged/NAT network. On bridge networking the panel
-# sits at NO DATA forever with nothing in the log to explain it.
+# Foreground `docker run --rm`, deliberately NOT --restart=always: systemd owns
+# the lifecycle. With both, `systemctl stop` leaves the container running.
 #
-# ---------------------------------------------------------------------------
-# CA ADDRESSING: pick the block that matches where this host lives.
-# As shipped this unit is configured for an OFF-VLAN host (mkoswgdkr-lv1,
-# 10.2.71.15). See "Reaching the IOC" in README.md before changing it.
-#
-# ON the control VLAN (10.2.2.0/24) -- the intended long-term home:
-#   -e EPICS_CA_ADDR_LIST="10.2.2.255 10.2.10.21" \
-#   -e EPICS_CA_AUTO_ADDR_LIST=YES \
-# Broadcast resolution reaches every IOC on the subnet. This is the normal
-# EPICS configuration and the one to use on the entrance display node.
-#
-# OFF the control VLAN (anything else, e.g. 10.2.71.0/24) -- active below:
-#   -e EPICS_CA_NAME_SERVERS=10.2.2.49:5064 \
-#   -e EPICS_CA_AUTO_ADDR_LIST=NO \
-# Broadcasts do not route, so 10.2.2.255 never arrives. Unicast UDP to
-# 10.2.2.49:5064 does NOT work either: mkosioc-lv1 runs two IOCs
-# (bfo-mk-ioc and toptica-mk-ioc) which both bind UDP 5064 with SO_REUSEADDR,
-# and a unicast datagram is delivered to only ONE of them -- in practice
-# toptica, which answers CA_PROTO_NOT_FOUND for every bfo: channel. TCP-based
-# name resolution sidesteps this because only one process can hold TCP 5064,
-# and on mkosioc-lv1 that is bfo-mk-ioc (verified 2026-08-11, pid 25611).
-#
-# FRAGILITY: that TCP ownership is decided by whichever IOC starts first. If
-# both restart and toptica wins the race, name resolution silently stops and
-# the panel goes to NO DATA with nothing in the log. The durable fix is a
-# pinned EPICS_CAS_SERVER_PORT for bfo-mk-ioc -- an IOC-side change, not ours.
-# Requires firewall: TCP 5064 (search + data) and UDP 5065 (beacons) to
-# 10.2.2.49. UDP needs stateful/conntrack return, since replies come back to
-# an ephemeral source port, not to 5064.
-# ---------------------------------------------------------------------------
+# CA ADDRESSING -- as shipped this is for a host NOT on the IOC's subnet.
+#   Same subnet as the IOC:   -e EPICS_CA_ADDR_LIST="<ioc-bcast>" \
+#                             -e EPICS_CA_AUTO_ADDR_LIST=YES \
+#   Different subnet (below): -e EPICS_CA_NAME_SERVERS=<ioc-ip>:5064 \
+#                             -e EPICS_CA_AUTO_ADDR_LIST=NO \
+# Broadcasts do not route between subnets, and unicast UDP to an IOC *host* can
+# reach the wrong IOC when several share UDP 5064. README explains both traps,
+# the firewall rules, and why TCP name resolution is a workaround rather than a
+# design. Verify any change with tools/ca_probe.py before restarting.
 
 [Unit]
 Description=TSRS status panel gateway (read-only EPICS CA bridge)

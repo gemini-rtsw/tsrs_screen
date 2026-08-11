@@ -4,7 +4,7 @@
 __pycache__
 *.pyc
 reference
-tools
+tools/*
+!tools/ca_probe.py
 README.md
 docker-compose.yml
-deploy

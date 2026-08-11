@@ -35,6 +35,10 @@ installing anything:
 
 ```bash
 python3 tools/ca_probe.py <ioc-ip> bfo:mcsStatus
+
+# or, on a host with no repo checkout (it ships in the image):
+docker run --rm --network host ghcr.io/gemini-rtsw/tsrs_screen:latest \
+  python /app/tools/ca_probe.py <ioc-ip> bfo:mcsStatus
 ```
 
 `FOUND` means you are done here. `NOT_FOUND` or `NO REPLY` — see *Reaching the
@@ -42,18 +46,37 @@ IOC* below; the tool prints which case you are in.
 
 ### 2. Install
 
-```bash
-# Authenticate to GHCR (or make the package public in repo → Packages)
-docker login ghcr.io -u <gh-user>          # PAT with read:packages
+**Control-network hosts can reach GHCR but not github.com**, so the unit file
+ships *inside the image* rather than being fetched from the repo. And `docker`
+already grants root-equivalent writes, which is what makes this work without
+broad `sudo` rights:
 
-sudo curl -fsSL -o /etc/systemd/system/tsrs-web.service \
-  https://raw.githubusercontent.com/gemini-rtsw/tsrs_screen/main/deploy/tsrs-web.service
-sudoedit /etc/systemd/system/tsrs-web.service   # set the CA block + TSRS_PORT
+```bash
+docker login ghcr.io -u <gh-user>          # PAT with read:packages; skip if public
+docker pull ghcr.io/gemini-rtsw/tsrs_screen:latest
+
+# Install the unit straight out of the image (--user 0 to write into /etc)
+docker run --rm --user 0 -v /etc/systemd/system:/out \
+  ghcr.io/gemini-rtsw/tsrs_screen:latest \
+  cp /app/deploy/tsrs-web.service /out/tsrs-web.service
+
+sudo systemctl edit --full tsrs-web        # set the CA block + TSRS_PORT
 sudo systemctl daemon-reload
 sudo systemctl enable --now tsrs-web
 ```
 
-Podman hosts: use `deploy/tsrs-web.container` (Quadlet) in
+If you cannot write to `/etc` at all, `systemctl edit` will create the unit from
+scratch — print the file and paste it in:
+
+```bash
+docker run --rm ghcr.io/gemini-rtsw/tsrs_screen:latest cat /app/deploy/tsrs-web.service
+sudo systemctl edit --force --full tsrs-web
+```
+
+`systemctl edit` opens `$EDITOR`; `sudo EDITOR=vim systemctl edit --full tsrs-web`
+if you would rather not use nano.
+
+Podman hosts: `/app/deploy/tsrs-web.container` (Quadlet) goes in
 `/etc/containers/systemd/` instead. One unit or the other, never both.
 
 ### 3. Verify

@@ -27,6 +27,13 @@ COPY gateway/channels.json /app/channels.json
 COPY tsrs.config.json /app/tsrs.config.json
 COPY static /app/static
 
+# Deployment units and the CA probe ride along in the image on purpose: the
+# target hosts can reach GHCR but NOT github.com, so `curl`-ing a unit file from
+# the repo is not an option there. Shipping them here makes the image the single
+# thing a deployer needs to fetch. See "Install" in README.md.
+COPY deploy /app/deploy
+COPY tools/ca_probe.py /app/tools/ca_probe.py
+
 ENV TSRS_CHANNELS=/app/channels.json \
     TSRS_CONFIG=/app/tsrs.config.json \
     TSRS_STATIC=/app/static \
