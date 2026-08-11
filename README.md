@@ -12,7 +12,67 @@ that way; TSRS shows state, the PLC and GIS enforce it.
 Requirements served: **REQ-TSRS-0210** (status screen at the observatory
 entrance) and **REQ-TSRS-0211** (dedicated EPICS copy of that screen).
 
-## Quick start
+## Deploy to production
+
+Target: an **x86_64** host on the control network, running the Docker daemon.
+Best placed on the display node itself, so the failure domain stays what it is
+today — one box.
+
+```bash
+# 1. Authenticate to GHCR (or make the package public in repo → Packages)
+docker login ghcr.io -u <gh-user>          # PAT with read:packages
+
+# 2. Install the service
+sudo curl -fsSL -o /etc/systemd/system/tsrs-web.service \
+  https://raw.githubusercontent.com/gemini-rtsw/tsrs_screen/main/deploy/tsrs-web.service
+sudoedit /etc/systemd/system/tsrs-web.service    # check EPICS_CA_ADDR_LIST for your site
+sudo systemctl daemon-reload
+sudo systemctl enable --now tsrs-web
+
+# 3. Verify: want ca_with_values == ca_total
+curl -s localhost:8080/api/healthz | python3 -m json.tool
+```
+
+Then browse to `http://localhost:8080`.
+
+```bash
+systemctl status tsrs-web
+journalctl -u tsrs-web -f
+sudo systemctl stop tsrs-web       # rollback; nothing else is touched
+```
+
+`EPICS_CA_ADDR_LIST` in the unit is set for **Gemini North**
+(`10.2.2.255 10.2.10.21`). Change it for GS.
+
+Podman hosts: use `deploy/tsrs-web.container` (Quadlet) in
+`/etc/containers/systemd/` instead. Use one unit or the other, never both.
+
+### Four things that will bite you
+
+1. **`--network host` is required, not preferred.** `EPICS_CA_ADDR_LIST` is a
+   *broadcast* address; CA name resolution and IOC beacons do not survive a
+   bridged/NAT network. On bridge networking the panel sits at NO DATA forever
+   with nothing in the log to explain why.
+2. **x86_64 only.** pyepics ships an x86-64 `libca`; on arm the container
+   starts and then dies on the first CA call.
+3. **Never run the simulator on the control network.** It serves the same 68
+   channel names — duplicates break CA name resolution for the real screen too.
+   `docker-compose` is for laptops.
+4. **Parallel-run it first.** Leave CS-Studio running and compare the 11 summary
+   LEDs side by side. Both are read-only, so there is no cutover risk, and it is
+   the only real correctness check available.
+
+### Expect up to five channels not to connect
+
+`bfo:cond1bits.B7/.B9/.BA`, `bfo:cond2bits.B2`, `bfo:cond5bits.B4` are the
+compliance additions below. They have never appeared on a screen, so this is the
+first time anything has asked the IOC for them. If they do not connect, that is a
+real finding — the design specifies them but the IOC does not publish them,
+turning a display fix into an IOC change. Set `include_compliance_additions:
+false` in `tsrs.config.json` and re-run `tools/gen_panel.py` to drop them
+meanwhile.
+
+## Local development
 
 ```bash
 docker-compose up -d --build      # simulator + gateway
@@ -152,35 +212,25 @@ safety-relevant one.** Sweep `rpm -q cssapp` across the display nodes before
 sizing the rollout. Gemini South also deploys `cssapp` (the `CP` branch in
 `lhandset.sh`), so confirm whether GS is in scope or a later phase.
 
-## Deployment
+## Deployment reference
 
-Two units are provided -- use one, not both:
-
-| Host runtime | Unit | Install |
+| Host runtime | Unit | Install to |
 |---|---|---|
-| **Docker daemon** | `deploy/tsrs-web.service` | `cp` to `/etc/systemd/system/`, `systemctl enable --now tsrs-web` |
-| podman (EL9) | `deploy/tsrs-web.container` | `cp` to `/etc/containers/systemd/`, `systemctl daemon-reload && systemctl start tsrs-web` |
+| **Docker daemon** | `deploy/tsrs-web.service` | `/etc/systemd/system/` |
+| podman (EL9) | `deploy/tsrs-web.container` | `/etc/containers/systemd/` |
 
-The Docker unit runs `docker run --rm` in the foreground rather than
-`--restart=always`, so systemd owns the lifecycle; with both, `systemctl stop`
-leaves the container running.
+Use one, not both. The Docker unit runs `docker run --rm` in the foreground
+rather than `--restart=always`, so systemd owns the lifecycle; with both,
+`systemctl stop` leaves the container running.
 
-Two things there are load-bearing:
-
-- **`Network=host` is required, not preferred.** `EPICS_CA_ADDR_LIST` is a
-  *broadcast* address (`10.2.2.255`); CA name resolution and IOC beacons do not
-  survive a bridged/NAT network. On bridge networking with
-  `EPICS_CA_AUTO_ADDR_LIST=YES`, libca would derive the podman subnet and
-  silently resolve nothing — NO DATA forever, with no error to explain it.
-- **Run the gateway on the display node itself**, bound to loopback. The
-  failure domain then stays exactly what it is today: one box. Centralising it
-  invents a new way to blank the panel for everyone at once, which needs an
-  availability plan first.
+**Run it on the display node**, bound to loopback. The failure domain then stays
+what it is today: one box. Centralising it invents a new way to blank the panel
+for everyone at once, which needs an availability plan first.
 
 The kiosk browser stays on the host — containerising chromium with X/Wayland
 access is all pain and no value. It replaces the `Css` invocation in
-`/etc/ITOps/tsrs-launcher.sh`, which should come under version control while
-you are there.
+`/etc/ITOps/tsrs-launcher.sh`, which should come under version control while you
+are there.
 
 ### CA client backends
 
