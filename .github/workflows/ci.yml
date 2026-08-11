@@ -16,6 +16,11 @@ on:
         description: "Release version; also tags the image. Empty on ordinary CI runs."
         required: false
         type: string
+      register:
+        description: "Push the RPM scratch tag to rpm-repo. Only a release should."
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -30,6 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -189,25 +196,25 @@ jobs:
   # repo, so a new host is `dnf install tsrs-screen` instead of a hand-pasted
   # unit file. Tag-triggered only: the RPM version IS the image tag, so building
   # one off an untagged commit would pin the unit to an image that never exists.
-  # Builds and verifies the RPM on every push so packaging breakage surfaces
-  # here, not during a release. Publishing lives in release.yml.
+  # The RPM is built by the shared gemini-rtsw-ci pipeline, not by a script in
+  # this repo -- one build path for every Gemini package. profile: lightweight
+  # skips the EPICS toolchain, the rpm-repo dependency container and the dev
+  # image, none of which a noarch config package needs.
+  #
+  # register is false here: our NVRA is fixed by the spec, so every commit would
+  # otherwise overwrite the released tag with a dev build. Only release.yml sets
+  # it true.
   rpm:
     needs: [generated-in-sync, smoke]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      # CI calls the same scripts a developer runs locally -- never a
-      # reimplementation of them. If these two lines pass on a laptop, they
-      # pass here, and a packaging change cannot be green in one and broken in
-      # the other.
-      - name: Build RPM
-        run: ./packaging/build-rpm.sh
-
-      - name: Verify RPM
-        run: ./packaging/verify-rpm.sh
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tsrs-screen-rpm
-          path: rpmout/tsrs-screen-*.rpm
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@lightweight
+    secrets: inherit
+    with:
+      scripts_dir: gemini-rtsw-ci
+      el_version: "9"
+      profile: lightweight
+      spec_path: packaging/tsrs-screen.spec
+      register: ${{ inputs.register || false }}
+      # Checks the generic build cannot know about: the unit is pinned to this
+      # version's image, GEMINI_SITE resolves, an upgrade preserves
+      # /etc/sysconfig. OUT points at the shared pipeline's output directory.
+      verify_cmd: OUT=$PWD/rpms ./packaging/verify-rpm.sh

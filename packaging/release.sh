@@ -59,13 +59,15 @@ else
 fi
 
 echo "2. rpm"
-run "$ROOT/packaging/build-rpm.sh"
-run "$ROOT/packaging/verify-rpm.sh"
+# Built by the shared pipeline script, exactly as CI does it.
+run "$ROOT/gemini-rtsw-ci/build_rpm.sh" --el 9 --profile lightweight \
+    --spec packaging/tsrs-screen.spec
+run env OUT="$ROOT/rpms" "$ROOT/packaging/verify-rpm.sh"
 
 echo "3. register with gemini-rtsw-repo"
 # --tag-only, then let the repo's own runner rebuild :latest -- that image is
 # multi-GB and the rebuild is a read-modify-write on one shared tag.
-run "$RTSW_REPO/upload-rpm.sh" --tag-only "$ROOT/rpmout/tsrs-screen-$V-1.el9.noarch.rpm"
+run "$RTSW_REPO/upload-rpm.sh" --tag-only "$ROOT/rpms/tsrs-screen-$V-1.el9.noarch.rpm"
 if command -v gh >/dev/null; then
     run gh workflow run rebuild-latest -R gemini-rtsw/gemini-rtsw-repo
 else

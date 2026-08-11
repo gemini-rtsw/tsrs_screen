@@ -1,8 +1,13 @@
 #!/bin/bash
-# Verify a built tsrs-screen RPM. CI runs exactly this, so "it passed locally"
-# means the same thing as "it passed in the pipeline".
+# Verify a built tsrs-screen RPM. CI runs exactly this via gemini-rtsw-ci's
+# verify_cmd input, so "it passed locally" means the same as "it passed in the
+# pipeline".
 #
-#   ./packaging/verify-rpm.sh            # verifies the dev build (0.0.0)
+# The RPM under test is built by gemini-rtsw-ci/build_rpm.sh (locally or in CI);
+# point OUT at wherever it landed. The +1 upgrade fixture is built here, inline,
+# so this script needs no build script of its own.
+#
+#   OUT=$PWD/rpms ./packaging/verify-rpm.sh     # after gemini-rtsw-ci/build_rpm.sh
 #   ./packaging/verify-rpm.sh 1.2.0
 #
 # Checks, in order of what would actually hurt if it broke:
@@ -30,19 +35,39 @@ RPM="$OUT/tsrs-screen-$VERSION-1.el9.noarch.rpm"
 # source so the only difference is the version -- which is exactly the thing
 # under test.
 #
-# It goes in a SUBDIRECTORY: it is a test fixture, not a deliverable, and
-# leaving it beside the real package meant anything globbing rpmout/ -- the CI
-# artifact upload, for one -- shipped two RPMs and invited someone to install
-# a version that was never released.
+# A test fixture, not a deliverable.
+#
+# Built inline rather than by calling a build script: the real build belongs to
+# gemini-rtsw-ci, and keeping a second local copy of it just to make a test
+# fixture is the duplication this repo is trying not to have.
+#
+# It is built into a TEMP dir, never into OUT: gemini-rtsw-ci/build_rpm.sh
+# populates rpms/ from a root container, so that directory is root-owned and
+# not writable by the user running this script. Keeping the fixture out of OUT
+# also means the CI artifact can never pick it up.
 NEXT="${VERSION%.*}.$(( ${VERSION##*.} + 1 ))"
-NEXTDIR="$OUT/upgrade-test"
+NEXTDIR="${TMPDIR:-/tmp}/tsrs-verify-fixture-$NEXT"
 if [ ! -f "$NEXTDIR/tsrs-screen-$NEXT-1.el9.noarch.rpm" ]; then
     echo "--- building $NEXT as an upgrade-test fixture ---"
-    OUT="$NEXTDIR" "$ROOT/packaging/build-rpm.sh" "$NEXT" >/dev/null
+    mkdir -p "$NEXTDIR"
+    docker run --rm --platform linux/amd64 \
+        -v "$ROOT":/src:ro -v "$NEXTDIR":/out -e V="$NEXT" "$BUILDER" \
+        bash -euo pipefail -c '
+            dnf -y install rpm-build systemd-rpm-macros tar >/dev/null
+            mkdir -p /root/rpmbuild/SOURCES && cd /src
+            tar czf "/root/rpmbuild/SOURCES/tsrs-screen-$V.tar.gz" \
+                --transform "s,^,tsrs-screen-$V/," \
+                deploy/tsrs-web.service.in deploy/tsrs-web.sysconfig \
+                deploy/resolve-site.sh deploy/site-MK.env deploy/site-CP.env \
+                tools/ca_probe.py
+            rpmbuild -bb --quiet --define "_version $V" \
+                /src/packaging/tsrs-screen.spec >/dev/null
+            cp /root/rpmbuild/RPMS/noarch/*.rpm /out/
+        ' >/dev/null
 fi
 
 echo "--- verifying $VERSION (upgrade target $NEXT) ---"
-docker run --rm --platform linux/amd64 -v "$OUT":/out:ro \
+docker run --rm --platform linux/amd64 -v "$OUT":/out:ro -v "$NEXTDIR":/fix:ro \
     -e V="$VERSION" -e N="$NEXT" "$BUILDER" bash -euo pipefail -c '
         IMG=ghcr.io/gemini-rtsw/tsrs_screen
         UNIT=/usr/lib/systemd/system/tsrs-web.service
@@ -59,7 +84,7 @@ docker run --rm --platform linux/amd64 -v "$OUT":/out:ro \
 
         echo "[3] upgrade keeps site edits, moves the pin"
         echo "EPICS_CA_NAME_SERVERS=10.9.9.9:5064  # SITE EDIT" >> /etc/sysconfig/tsrs-web
-        rpm -U --nodeps "/out/upgrade-test/tsrs-screen-$N-1.el9.noarch.rpm"
+        rpm -U --nodeps "/fix/tsrs-screen-$N-1.el9.noarch.rpm"
         grep -qx "Environment=IMAGE=$IMG:$N" "$UNIT" \
             || { echo "FAIL: upgrade did not move the pin to $N"; exit 1; }
         grep -q "SITE EDIT" /etc/sysconfig/tsrs-web \

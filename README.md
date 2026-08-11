@@ -198,8 +198,8 @@ Bump it, commit, then use any one of:
 - `git tag v<specver> && git push origin v<specver>`
 - `./packaging/release.sh` (from a laptop; `--dry-run` to preview)
 
-No version is ever typed. All three read `specver`, and a tag that disagrees
-with it is rejected — so what ships is only ever what the committed spec says.
+No version is ever typed. All three read `specver`, and a tag that disagrees is
+rejected — what ships is only ever what the committed spec says.
 
 | Artifact | Identifier |
 |---|---|
@@ -207,35 +207,25 @@ with it is rejected — so what ships is only ever what the committed spec says.
 | Image | `ghcr.io/gemini-rtsw/tsrs_screen:<specver>` (what the unit pins) |
 | Git tag | `v<specver>` |
 
-`release.yml` calls `ci.yml` as a reusable workflow — a release runs the same
-drift check, smoke test and image build as any commit, then publishes the exact
-RPM artifact CI verified. It refuses an already-released version, or a `specver`
-with anything but digits and dots (`-` is RPM's version/release separator).
+The RPM is built by **`gemini-rtsw-ci`** (submodule + reusable workflow) with
+`profile: lightweight` — no EPICS toolchain, no rpm-repo dependency container,
+no dev image. This repo holds no build script of its own; only the spec and
+`packaging/verify-rpm.sh`, whose checks the generic pipeline cannot know
+(image pin, site resolution, upgrade preserving `/etc/sysconfig`).
 
-`ci` alone runs on every push: builds and verifies the RPM as an artifact,
-publishes nothing.
+`ci` runs on every push with `register: false` — builds and verifies, publishes
+nothing. Only `release` sets `register: true`, so a dev build can never
+overwrite a released NVRA.
 
-Same scripts locally — green laptop, green pipeline:
+Locally, the same two commands CI runs:
 
 ```bash
-./packaging/build-rpm.sh      # version from the spec
-./packaging/verify-rpm.sh     # pin, upgrade/downgrade, site resolution, unit parse
+./gemini-rtsw-ci/build_rpm.sh --el 9 --profile lightweight --spec packaging/tsrs-screen.spec
+OUT=$PWD/rpms ./packaging/verify-rpm.sh
 ```
 
-Both run in a pinned `rockylinux:9.3` with `--platform linux/amd64`, so an Apple
-Silicon laptop builds the same package as the runner.
-
-Publishing follows the `gemini-rtsw-ci` contract: push the per-package scratch
-tag with `upload-rpm.sh --tag-only`, then call their reusable `publish.yml` as
-the single writer of `rpm-repo:latest`. Uses the built-in `GITHUB_TOKEN` —
-this repo needs **Write** on the `rpm-repo` package under *Manage Actions
-access*. `RPM_REPO_TOKEN` is only needed if `gemini-rtsw-repo` goes private.
-
-We deliberately do **not** use `gemini-rtsw-ci`'s `build_rpm.sh` submodule: that
-path is for EPICS packages pulling build deps from `rpm-repo` and shipping EL8/9
-dev images. This package is noarch with no build deps, and `verify-rpm.sh`
-asserts things specific to it (image pin, site resolution, upgrade preserving
-`/etc/sysconfig`). Publishing is shared; building is not.
+Publishing uses the built-in `GITHUB_TOKEN`; this repo needs **Write** on the
+`rpm-repo` package under *Manage Actions access*.
 
 ## Compliance findings
 

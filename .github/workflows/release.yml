@@ -78,59 +78,17 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       version: ${{ needs.version.outputs.version }}
+      register: true          # the shared pipeline pushes the scratch tag
     secrets: inherit
     permissions:
       contents: read
       packages: write
 
-  publish:
-    needs: [version, ci]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write        # push the git tag
-      packages: write        # push to the rpm-repo package (granted to this repo
-                             # in gemini-rtsw-repo's package settings)
-    steps:
-      - uses: actions/checkout@v4
-
-      # The exact RPM ci.yml built and verified -- not a rebuild, so what is
-      # published is what passed.
-      - uses: actions/download-artifact@v4
-        with:
-          name: tsrs-screen-rpm
-          path: rpmout
-
-      # Cloned over https with the built-in token: gemini-rtsw-ci's publish.yml
-      # does the same, so a public gemini-rtsw-repo needs no extra secret.
-      - uses: actions/checkout@v4
-        with:
-          repository: gemini-rtsw/gemini-rtsw-repo
-          path: rpmrepo
-          token: ${{ secrets.RPM_REPO_TOKEN || github.token }}
-
-      # GITHUB_TOKEN, not a PAT: write to the rpm-repo package is granted to
-      # this repository in the package's "Manage Actions access" settings, as
-      # gemini-rtsw-ci's README requires for every repo publishing there.
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # --tag-only per the gemini-rtsw-ci contract: the scratch tag is the
-      # durable source of truth, and publish-latest below is the single writer
-      # of :latest.
-      - name: Register the RPM
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
-        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/tsrs-screen-${{ needs.version.outputs.version }}-*.rpm
-
   # Single writer of rpm-repo:latest, shared with every other gemini-rtsw repo.
   # Frees runner disk before assembling the multi-GB yum image.
   publish-latest:
-    needs: publish
-    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@main
+    needs: ci
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@lightweight
     secrets: inherit
 
   # Tagged only once the RPM is actually served, so a tag means "this shipped"
