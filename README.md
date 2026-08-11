@@ -191,27 +191,31 @@ python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS nee
 
 ## Releasing
 
-1. Bump `%global specver` in `packaging/tsrs-screen.spec`, commit, merge.
-2. Then any one of:
-   - **Actions → release → Run workflow**
-   - `git tag v0.1.0 && git push origin v0.1.0` (must match `specver`)
-   - `./packaging/release.sh` — same steps, same scripts, from a laptop
+`%global specver` in `packaging/tsrs-screen.spec` is the single source of truth.
+Bump it, commit, then use any one of:
 
-No version is ever typed: it comes from the spec, so the RPM version, image tag
-and git tag cannot disagree. `release.yml` calls `ci.yml` as a reusable
-workflow, so a release runs exactly the checks every commit runs and publishes
-the same artifact CI verified. Each path builds the image, the RPM pinned to it,
-publishes to `gemini-rtsw-repo` and tags `v<version>`. All refuse a version
-that is already released, or a `specver` with anything but digits and dots
-(`-` is RPM's version/release separator).
+- **Actions → release → Run workflow**
+- `git tag v<specver> && git push origin v<specver>`
+- `./packaging/release.sh` (from a laptop; `--dry-run` to preview)
 
-`release.sh --dry-run` prints the plan without changing anything; `--no-image`
-skips the image build.
+No version is ever typed. All three read `specver`, and a tag that disagrees
+with it is rejected — so what ships is only ever what the committed spec says.
 
-`ci` runs on every push: builds and verifies a `0.1.0` RPM as an artifact,
+| Artifact | Identifier |
+|---|---|
+| RPM | `tsrs-screen-<specver>-1.el9.noarch` |
+| Image | `ghcr.io/gemini-rtsw/tsrs_screen:<specver>` (what the unit pins) |
+| Git tag | `v<specver>` |
+
+`release.yml` calls `ci.yml` as a reusable workflow — a release runs the same
+drift check, smoke test and image build as any commit, then publishes the exact
+RPM artifact CI verified. It refuses an already-released version, or a `specver`
+with anything but digits and dots (`-` is RPM's version/release separator).
+
+`ci` alone runs on every push: builds and verifies the RPM as an artifact,
 publishes nothing.
 
-Same two scripts locally — green laptop, green pipeline:
+Same scripts locally — green laptop, green pipeline:
 
 ```bash
 ./packaging/build-rpm.sh      # version from the spec
@@ -219,8 +223,11 @@ Same two scripts locally — green laptop, green pipeline:
 ```
 
 Both run in a pinned `rockylinux:9.3` with `--platform linux/amd64`, so an Apple
-Silicon laptop builds the same package as the runner. Needs an `RPM_REPO_TOKEN`
-secret (`write:packages`, plus read on `gemini-rtsw-repo`).
+Silicon laptop builds the same package as the runner.
+
+Publishing needs an `RPM_REPO_TOKEN` secret — a **classic** PAT with
+`write:packages`, `read:packages`, `repo`. Fine-grained tokens do not reliably
+grant GHCR package writes.
 
 ## Compliance findings
 
