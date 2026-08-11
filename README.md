@@ -191,38 +191,28 @@ python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS nee
 
 ## Releasing
 
-**Actions → build → Run workflow**, enter a version (`0.1.0`), run. Or
-`git tag v0.1.0 && git push origin v0.1.0`. Either way CI builds the image, the
-RPM pinned to that same tag, registers it with `gemini-rtsw-repo`, and (from the
-UI path) tags the commit afterwards.
+1. Bump `%global specver` in `packaging/tsrs-screen.spec`, commit, merge.
+2. **Actions → release → Run workflow.**
 
-Version must be digits and dots — `rpmbuild` treats `-` as the version/release
-separator, so `0.1.0-rc1` is rejected. Bump rather than reuse: `dnf` does not
-see a rebuild of the same NVRA as an upgrade.
+No inputs — the version comes from the spec, so nobody types it twice. The run
+builds the image, the RPM pinned to it, publishes to `gemini-rtsw-repo`, and
+tags `v<version>`. It refuses if that version is already released, or if
+`specver` contains anything but digits and dots (`-` is RPM's version/release
+separator).
 
-Nothing is published unless it's a `v*` tag or a dispatch with a version. Pushes
-and PRs build a `0.0.0` RPM as a workflow artifact only.
+`ci` runs on every push: builds and verifies a `0.1.0` RPM as an artifact,
+publishes nothing.
 
-CI **calls the same two scripts** you run locally, so a green laptop means a
-green pipeline:
+Same two scripts locally — green laptop, green pipeline:
 
 ```bash
-./packaging/build-rpm.sh 1.2.0     # -> rpmout/tsrs-screen-1.2.0-1.el9.noarch.rpm
-./packaging/verify-rpm.sh 1.2.0    # install, pin, upgrade/downgrade, unit parse
+./packaging/build-rpm.sh      # version from the spec
+./packaging/verify-rpm.sh     # pin, upgrade/downgrade, site resolution, unit parse
 ```
 
-Dev builds are version `0.0.0` and pin an image tag that was never published —
-they prove the packaging works, they are **not installable**. Both scripts run in
-a pinned `rockylinux:9.3` container
-with `--platform linux/amd64`, so an Apple Silicon laptop produces the same
-package as the runner. `verify-rpm.sh` builds a `+1` version itself to test that
-an upgrade moves the image pin while `/etc/sysconfig/tsrs-web` survives.
-
-Needs an `RPM_REPO_TOKEN` secret (`write:packages`, plus read on
-`gemini-rtsw-repo`) for the publish step.
-
-`reference/` holds the frozen 2015 design authority. PLC↔EPICS mapping, verified
-against six independent bits: `bfo:cond{N}bits.B{h}` ⇔ `PLC B3/(64 + (N-1)*16 + h)`.
+Both run in a pinned `rockylinux:9.3` with `--platform linux/amd64`, so an Apple
+Silicon laptop builds the same package as the runner. Needs an `RPM_REPO_TOKEN`
+secret (`write:packages`, plus read on `gemini-rtsw-repo`).
 
 ## Compliance findings
 

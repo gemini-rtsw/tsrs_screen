@@ -1,4 +1,4 @@
-name: build
+name: ci
 
 on:
   push:
@@ -7,11 +7,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Release version, digits and dots only (e.g. 0.1.0). Leave blank for a test run that publishes nothing."
-        required: false
-        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -163,7 +158,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.version != '' }}
 
       - name: Build and push gateway
         uses: docker/build-push-action@v6
@@ -184,95 +178,25 @@ jobs:
   # repo, so a new host is `dnf install tsrs-screen` instead of a hand-pasted
   # unit file. Tag-triggered only: the RPM version IS the image tag, so building
   # one off an untagged commit would pin the unit to an image that never exists.
-  # Builds and verifies on EVERY push and PR so packaging breakage surfaces
-  # immediately, not at release time. Only the publish steps are tag-gated.
-  # Does not need the image: the pin is a string, so the RPM builds regardless.
+  # Builds and verifies the RPM on every push so packaging breakage surfaces
+  # here, not during a release. Publishing lives in release.yml.
   rpm:
     needs: [generated-in-sync, smoke]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write        # to tag the release at the end
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0     # needs tags to reject a version that already exists
-
-      # Release when triggered by a v* tag, or by Run workflow with a version.
-      # Anything else is a dev build and gets 0.0.0 -- it must NOT claim a real
-      # version, because the version IS the image tag and would pin the unit to
-      # an image that was never published.
-      - name: Resolve version
-        id: v
-        run: |
-          V="${{ inputs.version }}"
-          if [ -n "$V" ]; then
-            V="${V#v}"
-            echo "$V" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || {
-              echo "::error::version must be digits and dots only. RPM treats '-' as the version/release separator, so 0.1.0-rc1 is rejected by rpmbuild."; exit 1; }
-            if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
-              echo "::error::tag v$V already exists. Bump the version -- dnf will not treat a rebuild of the same NVRA as an upgrade."; exit 1; fi
-            REL=true
-          else
-            case "$GITHUB_REF" in
-              refs/tags/v*) V="${GITHUB_REF_NAME#v}"; REL=true ;;
-              *)            V="0.0.0";               REL=false ;;
-            esac
-          fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "release=$REL" >> "$GITHUB_OUTPUT"
-          echo "Building $V (release=$REL)" >> "$GITHUB_STEP_SUMMARY"
 
       # CI calls the same scripts a developer runs locally -- never a
       # reimplementation of them. If these two lines pass on a laptop, they
       # pass here, and a packaging change cannot be green in one and broken in
       # the other.
       - name: Build RPM
-        run: ./packaging/build-rpm.sh "${{ steps.v.outputs.version }}"
+        run: ./packaging/build-rpm.sh
 
       - name: Verify RPM
-        run: ./packaging/verify-rpm.sh "${{ steps.v.outputs.version }}"
-
-      # upload-rpm.sh is used rather than reimplementing the scratch-tag push,
-      # so changes to the repo's storage model reach us for free.
-      - uses: actions/checkout@v4
-        if: steps.v.outputs.release == 'true'
-        with:
-          repository: gemini-rtsw/gemini-rtsw-repo
-          path: rpmrepo
-          token: ${{ secrets.RPM_REPO_TOKEN }}
-
-      - uses: docker/login-action@v3
-        if: steps.v.outputs.release == 'true'
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.RPM_REPO_TOKEN }}
-
-      # --tag-only: the scratch tag is the durable source of truth, and the
-      # :latest rebuild is a read-modify-write on one shared tag against a
-      # multi-GB image. gemini-rtsw-repo's own runner does that job.
-      - name: Register the RPM
-        if: steps.v.outputs.release == 'true'
-        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/tsrs-screen-${{ steps.v.outputs.version }}-*.rpm
-
-      - name: Publish :latest on the repo's runner
-        if: steps.v.outputs.release == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.RPM_REPO_TOKEN }}
-        run: gh workflow run rebuild-latest -R gemini-rtsw/gemini-rtsw-repo
-
-      # Tag only after the RPM is published, so a tag always means "this
-      # shipped". Pushed with GITHUB_TOKEN, which deliberately does not
-      # re-trigger this workflow -- the work is already done.
-      - name: Tag the release
-        if: steps.v.outputs.release == 'true' && inputs.version != ''
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.v.outputs.version }}" -m "Release v${{ steps.v.outputs.version }}"
-          git push origin "v${{ steps.v.outputs.version }}"
+        run: ./packaging/verify-rpm.sh
 
       - uses: actions/upload-artifact@v4
         with:
-          name: tsrs-screen-rpm-${{ steps.v.outputs.version }}
-          path: rpmout/tsrs-screen-${{ steps.v.outputs.version }}-*.rpm
+          name: tsrs-screen-rpm
+          path: rpmout/tsrs-screen-*.rpm

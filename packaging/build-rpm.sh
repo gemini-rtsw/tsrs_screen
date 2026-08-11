@@ -20,14 +20,10 @@ OUT="${OUT:-$ROOT/rpmout}"
 # that built last month stops building today for reasons nobody can reproduce.
 BUILDER="${BUILDER:-rockylinux:9.3}"
 
+# Default to the version in the spec -- one place, no second copy to forget.
 VERSION="${1:-${TSRS_VERSION:-}}"
-if [ -z "$VERSION" ]; then
-    # An exact tag means a release build; anything else is a dev build and must
-    # NOT claim a real version -- the version is the image tag, and pretending
-    # to be 1.2.0 would pin the unit to an image that does not exist.
-    VERSION="$(git -C "$ROOT" describe --tags --exact-match 2>/dev/null | sed 's/^v//' || true)"
-    VERSION="${VERSION:-0.0.0}"
-fi
+[ -n "$VERSION" ] || VERSION="$(awk '/^%global specver/ {print $3}' "$ROOT/packaging/tsrs-screen.spec")"
+[ -n "$VERSION" ] || { echo "cannot read specver from packaging/tsrs-screen.spec" >&2; exit 1; }
 
 echo "building tsrs-screen $VERSION (builder: $BUILDER)"
 mkdir -p "$OUT"

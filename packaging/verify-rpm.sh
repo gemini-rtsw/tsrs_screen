@@ -20,10 +20,8 @@ OUT="${OUT:-$ROOT/rpmout}"
 BUILDER="${BUILDER:-rockylinux:9.3}"
 
 VERSION="${1:-${TSRS_VERSION:-}}"
-if [ -z "$VERSION" ]; then
-    VERSION="$(git -C "$ROOT" describe --tags --exact-match 2>/dev/null | sed 's/^v//' || true)"
-    VERSION="${VERSION:-0.0.0}"
-fi
+[ -n "$VERSION" ] || VERSION="$(awk '/^%global specver/ {print $3}' "$ROOT/packaging/tsrs-screen.spec")"
+[ -n "$VERSION" ] || { echo "cannot read specver from packaging/tsrs-screen.spec" >&2; exit 1; }
 
 RPM="$OUT/tsrs-screen-$VERSION-1.el9.noarch.rpm"
 [ -f "$RPM" ] || { echo "no such RPM: $RPM -- run packaging/build-rpm.sh $VERSION first" >&2; exit 1; }

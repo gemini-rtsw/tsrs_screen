@@ -5,18 +5,17 @@
 # the image tag matching this package's version, so `rpm -q tsrs-screen` tells
 # you exactly what runs and `dnf downgrade` is a real rollback.
 #
-# Build (CI does this; VERSION comes from the v* git tag):
-#   rpmbuild -bb --define "_version 1.2.0" packaging/tsrs-screen.spec
-#
-# Version is a define rather than a literal so the git tag stays the single
-# source of truth -- a literal here would need bumping in a second place and
-# would silently disagree with the image tag when someone forgot.
-%{!?_version: %{error: pass --define "_version X.Y.Z" (from the git tag)}}
+# THE VERSION LIVES HERE. Bump specver in a commit, then run the `release`
+# workflow -- it reads this value, so the RPM version, the image tag and the git
+# tag cannot disagree and nobody types a version twice.
+%global specver 0.1.0
 
+# _version override exists only for verify-rpm.sh, which builds a throwaway
+# +1 package to test the upgrade path.
 %global appimage ghcr.io/gemini-rtsw/tsrs_screen
 
 Name:           tsrs-screen
-Version:        %{_version}
+Version:        %{?_version}%{!?_version:%{specver}}
 Release:        1%{?dist}
 Summary:        TSRS status panel gateway (read-only EPICS CA bridge)
 
