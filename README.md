@@ -175,7 +175,10 @@ green pipeline:
 ./packaging/verify-rpm.sh 1.2.0    # install, pin, upgrade/downgrade, unit parse
 ```
 
-No args = a `0.0.0` dev build. Both run in a pinned `rockylinux:9.3` container
+Every push builds, verifies and uploads the RPM as a workflow artifact; only
+`v*` tags publish it to the repo. Untagged builds are version `0.0.0` and pin an
+image tag that was never published — they exist to prove the packaging works,
+**not to install**. Both run in a pinned `rockylinux:9.3` container
 with `--platform linux/amd64`, so an Apple Silicon laptop produces the same
 package as the runner. `verify-rpm.sh` builds a `+1` version itself to test that
 an upgrade moves the image pin while `/etc/sysconfig/tsrs-web` survives.
