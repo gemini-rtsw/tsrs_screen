@@ -12,9 +12,6 @@ that way; TSRS shows state, the PLC and GIS enforce it.
 Requirements served: **REQ-TSRS-0210** (status screen at the observatory
 entrance) and **REQ-TSRS-0211** (dedicated EPICS copy of that screen).
 
-Working on this repo with Claude Code? `CLAUDE.md` carries the invariants and the
-traps; `docs/STATUS.md` carries current state and open items.
-
 ## Deploy to production
 
 Target: an **x86_64** host on the control network, running the Docker daemon.
