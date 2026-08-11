@@ -8,6 +8,10 @@
 # --restart=always, or the daemon and systemd both try to manage restarts and
 # `systemctl stop` leaves the container running.
 #
+# --network host means NO PORT ISOLATION: if the host already has something on
+# TSRS_PORT the gateway exits 1 with "address already in use". On a shared
+# docker host, check with `ss -ltnp` and set TSRS_PORT to something free.
+#
 # --network host is REQUIRED, not a preference. EPICS_CA_ADDR_LIST below is a
 # *broadcast* address; CA name resolution and IOC beacons do not survive a
 # bridged/NAT network. On bridge networking the panel sits at NO DATA forever
@@ -37,6 +41,8 @@ ExecStart=/usr/bin/docker run --rm --name tsrs-web \
   --read-only \
   --cap-drop ALL \
   --security-opt no-new-privileges \
+  -e TSRS_BIND=127.0.0.1 \
+  -e TSRS_PORT=8080 \
   -e TSRS_CA_BACKEND=pyepics \
   -e EPICS_CA_ADDR_LIST="10.2.2.255 10.2.10.21" \
   -e EPICS_CA_AUTO_ADDR_LIST=YES \

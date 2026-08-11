@@ -47,7 +47,12 @@ sudo systemctl stop tsrs-web       # rollback; nothing else is touched
 Podman hosts: use `deploy/tsrs-web.container` (Quadlet) in
 `/etc/containers/systemd/` instead. Use one unit or the other, never both.
 
-### Four things that will bite you
+Port 8080 by default. `--network host` means **no port isolation**, so on a
+shared docker host something may already hold it — the gateway then exits 1 with
+"address already in use". Check with `ss -ltnp` and set `TSRS_PORT` (and
+`TSRS_BIND`, default `127.0.0.1` in the unit) to something free.
+
+### Five things that will bite you
 
 1. **`--network host` is required, not preferred.** `EPICS_CA_ADDR_LIST` is a
    *broadcast* address; CA name resolution and IOC beacons do not survive a
@@ -61,6 +66,10 @@ Podman hosts: use `deploy/tsrs-web.container` (Quadlet) in
 4. **Parallel-run it first.** Leave CS-Studio running and compare the 11 summary
    LEDs side by side. Both are read-only, so there is no cutover risk, and it is
    the only real correctness check available.
+5. **`docker pull` in the unit runs as root**, which has no GHCR credentials
+   even if your own user does. Harmless while the image is present locally (the
+   `-` prefix tolerates the failure), but auto-update on restart will not work
+   until the package is public or root is logged in.
 
 ### Expect up to five channels not to connect
 
