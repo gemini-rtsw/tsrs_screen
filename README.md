@@ -34,7 +34,7 @@ repo](https://github.com/gemini-rtsw/gemini-rtsw-repo). Serve it, then install:
 docker run -d --name rpm-repo -p 8081:8080 ghcr.io/gemini-rtsw/rpm-repo:latest
 sudo dnf config-manager --add-repo http://localhost:8081/rpm-repo/
 sudo dnf install tsrs-screen
-sudo vi /etc/sysconfig/tsrs-web        # IOC address + port; survives upgrades
+sudo vi /etc/sysconfig/tsrs-web        # port + any host override; survives upgrades
 sudo systemctl enable --now tsrs-web
 ```
 
@@ -73,10 +73,13 @@ container at boot. A real reboot is the only proof it comes back.
 
 The top cause of `ca_connected: 0`, and it fails silently.
 
+The site file default assumes the panel host is on the IOC's subnet. Override in
+`/etc/sysconfig/tsrs-web` if not:
+
 | Panel host | Config |
 |---|---|
-| Same subnet as IOC | `EPICS_CA_ADDR_LIST="<ioc-bcast>"`, `EPICS_CA_AUTO_ADDR_LIST=YES` |
-| Different subnet | `EPICS_CA_NAME_SERVERS=<ioc-ip>:5064`, `EPICS_CA_AUTO_ADDR_LIST=NO`, **no** `ADDR_LIST` |
+| Same subnet as IOC | site-file default — nothing to do |
+| Different subnet | `EPICS_CA_ADDR_LIST=` (blank it), `EPICS_CA_NAME_SERVERS=<ioc-ip>:5064`, `EPICS_CA_AUTO_ADDR_LIST=NO` |
 
 Three traps:
 
@@ -94,12 +97,36 @@ Three traps:
 restart, the panel goes to NO DATA with nothing in the log. Durable fix is a
 pinned `EPICS_CAS_SERVER_PORT` on the IOC side; prefer the IOC's own subnet.
 
-## Other sites
+## Sites
 
-The `bfo:` prefix is baked into `tsrs_indicators.csv`,
-`compliance_additions.csv` and `tsrs.config.json` — it is **not** a config flag.
-New IOC address = edit the unit. New telescope = regenerate the CSVs from that
-site's `.opi` files.
+One RPM serves both telescopes. At start, `resolve-site.sh` picks the address
+set from `GEMINI_SITE` and merges it with your host overrides:
+
+```
+/usr/share/tsrs-screen/site-MK.env   package-owned site facts (upgrades update these)
+/etc/sysconfig/tsrs-web              host overrides, %config(noreplace), WINS
+        ↓  merged at every start
+/run/tsrs-web.env                    what the container actually got
+```
+
+Site is resolved first-match: `TSRS_SITE` in `/etc/sysconfig/tsrs-web` →
+`$GEMINI_SITE` → a `GEMINI_SITE=` assignment scraped from `/etc/profile.d/*.sh`
+or `/etc/environment` → **`MK`**. The scrape exists because `GEMINI_SITE` is a
+login-shell variable and systemd services never see it; the assignment is
+scraped rather than sourced, so nothing else in those scripts runs.
+
+⚠️ **CP is not commissioned.** `site-CP.env` carries
+`TSRS_SITE_UNCONFIGURED=1` and the service refuses to start there. That is
+deliberate: falling back to MK would render a readiness screen from the wrong
+mountain. Fill in the CP addresses, verify with `tsrs-ca-probe`, delete that
+line.
+
+The `bfo:` prefix is still baked into `tsrs_indicators.csv`,
+`compliance_additions.csv` and `tsrs.config.json` — **not** a config flag. If CP
+uses a different prefix, the CSVs must be regenerated from CP's `.opi` files;
+no site file can substitute.
+
+`cat /run/tsrs-web.env` after a start shows exactly what was resolved.
 
 ## Gotchas
 

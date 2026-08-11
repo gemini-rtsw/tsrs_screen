@@ -42,7 +42,9 @@ docker run --rm --platform linux/amd64 \
         # honest about what the package is actually built from.
         tar czf "/root/rpmbuild/SOURCES/tsrs-screen-$V.tar.gz" \
             --transform "s,^,tsrs-screen-$V/," \
-            deploy/tsrs-web.service.in deploy/tsrs-web.sysconfig tools/ca_probe.py
+            deploy/tsrs-web.service.in deploy/tsrs-web.sysconfig \
+            deploy/resolve-site.sh deploy/site-MK.env deploy/site-CP.env \
+            tools/ca_probe.py
         rpmbuild -bb --define "_version $V" /src/packaging/tsrs-screen.spec
         cp /root/rpmbuild/RPMS/noarch/*.rpm /out/
     '

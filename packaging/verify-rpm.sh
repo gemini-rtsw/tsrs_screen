@@ -66,7 +66,33 @@ docker run --rm --platform linux/amd64 -v "$OUT":/out:ro \
         grep -qx "Environment=IMAGE=$IMG:$V" "$UNIT" \
             || { echo "FAIL: downgrade did not restore $V"; exit 1; }
 
-        echo "[5] unit parses, probe runs"
+        echo "[5] site resolution: default MK, GEMINI_SITE honoured, CP refuses"
+        R=/usr/libexec/tsrs-screen/resolve-site.sh
+        mkdir -p /run
+        # no GEMINI_SITE anywhere -> MK
+        env -u GEMINI_SITE "$R" >/dev/null
+        grep -qx "TSRS_SITE=MK" /run/tsrs-web.env || { echo "FAIL: default site is not MK"; exit 1; }
+        grep -q "^EPICS_CA_ADDR_LIST=10.2.2.255" /run/tsrs-web.env \
+            || { echo "FAIL: MK addressing missing"; cat /run/tsrs-web.env; exit 1; }
+        # sysconfig override must beat the site file (docker takes the last key)
+        tail -1 /run/tsrs-web.env | grep -q . || { echo "FAIL: env file ends oddly"; exit 1; }
+        # scraped from profile.d, since services do not read it
+        mkdir -p /etc/profile.d && echo "export GEMINI_SITE=CP" > /etc/profile.d/gemini.sh
+        if env -u GEMINI_SITE "$R" >/dev/null 2>&1; then
+            echo "FAIL: unconfigured CP site started anyway"; exit 1
+        fi
+        # inherited env wins over profile.d scrape, and MK still works
+        GEMINI_SITE=MK "$R" >/dev/null
+        grep -qx "TSRS_SITE=MK" /run/tsrs-web.env || { echo "FAIL: GEMINI_SITE=MK not honoured"; exit 1; }
+        # explicit TSRS_SITE in sysconfig beats everything
+        echo "TSRS_SITE=CP" >> /etc/sysconfig/tsrs-web
+        if GEMINI_SITE=MK "$R" >/dev/null 2>&1; then
+            echo "FAIL: TSRS_SITE=CP override ignored"; exit 1
+        fi
+        sed -i "/^TSRS_SITE=CP$/d" /etc/sysconfig/tsrs-web
+        rm -f /etc/profile.d/gemini.sh
+
+        echo "[6] unit parses, probe runs"
         # systemd-analyze is not in the minimal builder image. Install it rather
         # than skipping: a check that silently no-ops when its tool is missing
         # is worse than no check, because it reports success.

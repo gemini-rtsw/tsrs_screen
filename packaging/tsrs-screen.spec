@@ -67,6 +67,9 @@ grep -q '^Environment=IMAGE=%{appimage}:%{version}$' tsrs-web.service \
 install -Dpm 0644 tsrs-web.service       %{buildroot}%{_unitdir}/tsrs-web.service
 install -Dpm 0644 deploy/tsrs-web.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/tsrs-web
 install -Dpm 0755 tools/ca_probe.py      %{buildroot}%{_bindir}/tsrs-ca-probe
+install -Dpm 0755 deploy/resolve-site.sh %{buildroot}%{_libexecdir}/tsrs-screen/resolve-site.sh
+install -Dpm 0644 deploy/site-MK.env     %{buildroot}%{_datadir}/tsrs-screen/site-MK.env
+install -Dpm 0644 deploy/site-CP.env     %{buildroot}%{_datadir}/tsrs-screen/site-CP.env
 
 %post
 %systemd_post tsrs-web.service
@@ -86,6 +89,12 @@ install -Dpm 0755 tools/ca_probe.py      %{buildroot}%{_bindir}/tsrs-ca-probe
 %{_unitdir}/tsrs-web.service
 %config(noreplace) %{_sysconfdir}/sysconfig/tsrs-web
 %{_bindir}/tsrs-ca-probe
+%{_libexecdir}/tsrs-screen/resolve-site.sh
+# NOT %%config: these are the package's verified site facts, and an upgrade
+# carrying a corrected IOC address must actually reach the host. Host-specific
+# deviations belong in /etc/sysconfig/tsrs-web, which is %%config(noreplace).
+%{_datadir}/tsrs-screen/site-MK.env
+%{_datadir}/tsrs-screen/site-CP.env
 
 %changelog
 * Tue Aug 11 2026 Gemini RTSW <rtsw@gemini.edu> - 0.0.0-1

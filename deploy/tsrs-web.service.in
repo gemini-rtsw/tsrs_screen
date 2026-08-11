@@ -40,6 +40,12 @@ Environment=IMAGE=@IMAGE@
 ExecStartPre=-/usr/bin/docker pull ${IMAGE}
 ExecStartPre=-/usr/bin/docker rm -f tsrs-web
 
+# Resolves GEMINI_SITE (MK/CP, default MK) and merges the site address set with
+# /etc/sysconfig/tsrs-web into /run/tsrs-web.env. NOT '-' prefixed: an
+# unresolvable or unconfigured site must stop the start, never fall back to the
+# other telescope's IOC.
+ExecStartPre=/usr/libexec/tsrs-screen/resolve-site.sh
+
 # Site settings come from --env-file, so this unit is site-independent and the
 # package can own it. Flags that are policy rather than site config stay here.
 ExecStart=/usr/bin/docker run --rm --name tsrs-web \
@@ -47,7 +53,7 @@ ExecStart=/usr/bin/docker run --rm --name tsrs-web \
   --read-only \
   --cap-drop ALL \
   --security-opt no-new-privileges \
-  --env-file /etc/sysconfig/tsrs-web \
+  --env-file /run/tsrs-web.env \
   -e TSRS_CA_BACKEND=pyepics \
   -e TSRS_CA_WATCHDOG_S=60 \
   -e TSRS_LOGLEVEL=INFO \
