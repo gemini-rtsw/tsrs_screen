@@ -29,7 +29,10 @@ VERSION="${1:-${TSRS_VERSION:-}}"
 [ -n "$VERSION" ] || { echo "cannot read specver from packaging/tsrs-screen.spec" >&2; exit 1; }
 
 RPM="$OUT/tsrs-screen-$VERSION-1.el9.noarch.rpm"
-[ -f "$RPM" ] || { echo "no such RPM: $RPM -- run packaging/build-rpm.sh $VERSION first" >&2; exit 1; }
+[ -f "$RPM" ] || { echo "no such RPM: $RPM
+Build it first, then point OUT at the result:
+  ./gemini-rtsw-ci/build_rpm.sh --el 9 --profile lightweight --spec packaging/tsrs-screen.spec
+  OUT=\$PWD/rpms $0" >&2; exit 1; }
 
 # The upgrade test needs a second, higher version. Build it from the same
 # source so the only difference is the version -- which is exactly the thing
