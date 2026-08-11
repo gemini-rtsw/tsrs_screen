@@ -6,3 +6,4 @@ __pycache__/
 # generated from deploy/tsrs-web.service.in at build time
 deploy/tsrs-web.service
 rpmout/
+rpms/

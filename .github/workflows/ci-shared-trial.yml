@@ -1,0 +1,35 @@
+# TRIAL: build this package through gemini-rtsw-ci's shared pipeline instead of
+# our own packaging/build-rpm.sh.
+#
+# Deliberately separate from ci.yml and release.yml, which stay the working
+# path. This workflow proves the shared entry point can build a lightweight
+# package before anything depends on it.
+#
+# Pinned to the `lightweight` BRANCH of gemini-rtsw-ci, in two places that must
+# agree:
+#   - `uses: ...@lightweight`        picks the workflow file
+#   - the gemini-rtsw-ci submodule   picks build_rpm.sh
+# Other repos are on @main with their own submodule pins and cannot see either.
+#
+# --tag-only by construction: this workflow never publishes rpm-repo:latest, so
+# a broken trial build cannot reach any host. Promote by merging the branch to
+# main, repointing `uses:`, and bumping the submodule.
+name: ci-shared-trial
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@lightweight
+    secrets: inherit
+    with:
+      scripts_dir: gemini-rtsw-ci
+      el_version: "9"
+      profile: lightweight
+      spec_path: packaging/tsrs-screen.spec
+      # The generic build cannot know that the unit must be pinned to this
+      # version's image, that GEMINI_SITE must resolve to MK, or that an upgrade
+      # must preserve /etc/sysconfig. OUT points at the shared pipeline's output
+      # directory instead of our own rpmout/.
+      verify_cmd: OUT=$PWD/rpms ./packaging/verify-rpm.sh
