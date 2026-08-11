@@ -225,9 +225,11 @@ Same scripts locally — green laptop, green pipeline:
 Both run in a pinned `rockylinux:9.3` with `--platform linux/amd64`, so an Apple
 Silicon laptop builds the same package as the runner.
 
-Publishing needs an `RPM_REPO_TOKEN` secret — a **classic** PAT with
-`write:packages`, `read:packages`, `repo`. Fine-grained tokens do not reliably
-grant GHCR package writes.
+Publishing uses the built-in `GITHUB_TOKEN`: write access to the `rpm-repo`
+package is granted to this repository in `gemini-rtsw-repo`'s package settings,
+as for every other repo publishing there. An `RPM_REPO_TOKEN` secret is only
+needed if `gemini-rtsw-repo` becomes private, since the built-in token cannot
+check out another private repo.
 
 ## Compliance findings
 

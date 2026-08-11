@@ -76,17 +76,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write        # push the git tag
+      packages: write        # push to the rpm-repo package (granted to this repo
+                             # in gemini-rtsw-repo's package settings)
     steps:
-      # Checked first: without it the next step fails as "Input required and not
-      # supplied: token", which says nothing about which secret or why.
-      - name: Require RPM_REPO_TOKEN
-        env:
-          TOKEN: ${{ secrets.RPM_REPO_TOKEN }}
-        run: |
-          [ -n "$TOKEN" ] || {
-            echo "::error::RPM_REPO_TOKEN is not set. Settings -> Secrets and variables -> Actions -> New repository secret. Needs a CLASSIC PAT with write:packages, read:packages and repo -- fine-grained tokens do not reliably grant GHCR package writes."
-            exit 1; }
-
       - uses: actions/checkout@v4
 
       # The exact RPM ci.yml built and verified -- not a rebuild, so what is
@@ -96,28 +88,35 @@ jobs:
           name: tsrs-screen-rpm
           path: rpmout
 
+      # RPM_REPO_TOKEN is only needed if gemini-rtsw-repo is private; the
+      # built-in token cannot check out another private repo. For a public one
+      # it is unnecessary.
       - uses: actions/checkout@v4
         with:
           repository: gemini-rtsw/gemini-rtsw-repo
           path: rpmrepo
-          token: ${{ secrets.RPM_REPO_TOKEN }}
+          token: ${{ secrets.RPM_REPO_TOKEN || github.token }}
 
+      # GITHUB_TOKEN, not a PAT: write to the rpm-repo package is granted to
+      # this repository in gemini-rtsw-repo's package settings, the same way
+      # every other repo publishing there works.
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.RPM_REPO_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --tag-only: the scratch tag is the durable source of truth, and the
-      # :latest rebuild is a read-modify-write on one shared multi-GB image.
-      # gemini-rtsw-repo's own runner does that job.
-      - name: Register the RPM
-        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/tsrs-screen-${{ needs.version.outputs.version }}-*.rpm
-
-      - name: Publish :latest on the repo's runner
+      # Full upload, not --tag-only: it pushes the scratch tag and then runs
+      # sync_repo.sh to republish :latest. Dispatching gemini-rtsw-repo's own
+      # rebuild-latest workflow would need a PAT, since GITHUB_TOKEN cannot
+      # trigger workflows in another repository. One RPM per release, so the
+      # concurrent-publish race their README warns about does not apply, and
+      # sync_repo.sh is written to stay inside a runner's disk.
+      - name: Register and publish the RPM
         env:
-          GH_TOKEN: ${{ secrets.RPM_REPO_TOKEN }}
-        run: gh workflow run rebuild-latest -R gemini-rtsw/gemini-rtsw-repo
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: ./rpmrepo/upload-rpm.sh rpmout/tsrs-screen-${{ needs.version.outputs.version }}-*.rpm
 
       # Tagged last, so a tag always means "this shipped" rather than "this was
       # attempted". Pushed with GITHUB_TOKEN, which deliberately does not
