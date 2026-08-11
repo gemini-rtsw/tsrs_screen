@@ -28,8 +28,8 @@ VERSION="${1:-${TSRS_VERSION:-}}"
 [ -n "$VERSION" ] || VERSION="$(awk '/^%global specver/ {print $3}' "$ROOT/packaging/tsrs-screen.spec")"
 [ -n "$VERSION" ] || { echo "cannot read specver from packaging/tsrs-screen.spec" >&2; exit 1; }
 
-RPM="$OUT/tsrs-screen-$VERSION-1.el9.noarch.rpm"
-[ -f "$RPM" ] || { echo "no such RPM: $RPM
+RPM=$(ls "$OUT"/tsrs-screen-"$VERSION"-*.noarch.rpm 2>/dev/null | head -1)
+[ -n "$RPM" ] && [ -f "$RPM" ] || { echo "no such RPM: $RPM
 Build it first, then point OUT at the result:
   ./gemini-rtsw-ci/build_rpm.sh --el 9 --profile lightweight --spec packaging/tsrs-screen.spec
   OUT=\$PWD/rpms $0" >&2; exit 1; }
@@ -56,7 +56,10 @@ if [ ! -f "$NEXTDIR/tsrs-screen-$NEXT-1.el9.noarch.rpm" ]; then
     docker run --rm --platform linux/amd64 \
         -v "$ROOT":/src:ro -v "$NEXTDIR":/out -e V="$NEXT" "$BUILDER" \
         bash -euo pipefail -c '
-            dnf -y install rpm-build systemd-rpm-macros tar >/dev/null
+            # git so the spec can resolve %{git_hash}; without it the Release
+            # says nogit, which still works but is not what CI produces.
+            dnf -y install rpm-build systemd-rpm-macros tar git >/dev/null
+            git config --global --add safe.directory /src
             mkdir -p /root/rpmbuild/SOURCES && cd /src
             tar czf "/root/rpmbuild/SOURCES/tsrs-screen-$V.tar.gz" \
                 --transform "s,^,tsrs-screen-$V/," \
@@ -71,11 +74,11 @@ fi
 
 echo "--- verifying $VERSION (upgrade target $NEXT) ---"
 docker run --rm --platform linux/amd64 -v "$OUT":/out:ro -v "$NEXTDIR":/fix:ro \
-    -e V="$VERSION" -e N="$NEXT" "$BUILDER" bash -euo pipefail -c '
+    -e V="$VERSION" -e N="$NEXT" -e RPM="$(basename "$RPM")" "$BUILDER" bash -euo pipefail -c '
         IMG=ghcr.io/gemini-rtsw/tsrs_screen
         UNIT=/usr/lib/systemd/system/tsrs-web.service
 
-        rpm -i --nodeps "/out/tsrs-screen-$V-1.el9.noarch.rpm"
+        rpm -i --nodeps "/out/$RPM"
 
         echo "[1] image pin"
         grep -qx "Environment=IMAGE=$IMG:$V" "$UNIT" \
@@ -87,14 +90,14 @@ docker run --rm --platform linux/amd64 -v "$OUT":/out:ro -v "$NEXTDIR":/fix:ro \
 
         echo "[3] upgrade keeps site edits, moves the pin"
         echo "EPICS_CA_NAME_SERVERS=10.9.9.9:5064  # SITE EDIT" >> /etc/sysconfig/tsrs-web
-        rpm -U --nodeps "/fix/tsrs-screen-$N-1.el9.noarch.rpm"
+        rpm -U --nodeps /fix/tsrs-screen-$N-*.noarch.rpm
         grep -qx "Environment=IMAGE=$IMG:$N" "$UNIT" \
             || { echo "FAIL: upgrade did not move the pin to $N"; exit 1; }
         grep -q "SITE EDIT" /etc/sysconfig/tsrs-web \
             || { echo "FAIL: upgrade clobbered site config"; exit 1; }
 
         echo "[4] downgrade rolls the pin back"
-        rpm -U --oldpackage --nodeps "/out/tsrs-screen-$V-1.el9.noarch.rpm"
+        rpm -U --oldpackage --nodeps "/out/$RPM"
         grep -qx "Environment=IMAGE=$IMG:$V" "$UNIT" \
             || { echo "FAIL: downgrade did not restore $V"; exit 1; }
 

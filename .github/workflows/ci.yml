@@ -1,64 +1,44 @@
+# Standard gemini-rtsw pipeline: a build hook and a publish hook, plus the one
+# job that cannot live in gemini-rtsw-ci -- this project ships a container, and
+# the shared pipeline builds RPMs and EPICS dev images, not application images.
+#
+# The RPM itself is entirely gemini-rtsw-ci's: profile lightweight, our spec,
+# and verify-rpm.sh for the checks a generic build cannot make.
 name: ci
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
-  # Called by release.yml so a release runs the SAME drift check, smoke test and
-  # image build as any other commit -- no second copy to drift out of step.
-  workflow_call:
-    inputs:
-      version:
-        description: "Release version; also tags the image. Empty on ordinary CI runs."
-        required: false
-        type: string
-      register:
-        description: "Push the RPM scratch tag to rpm-repo. Only a release should."
-        required: false
-        default: false
-        type: boolean
-
 env:
-  REGISTRY: ghcr.io
-  IMAGE: ${{ github.repository }}
+  IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  # The panel and the gateway's channel list are both generated from the CSVs.
-  # If someone edits a CSV without regenerating, the committed panel silently
-  # disagrees with the indicator map -- so fail the build on drift rather than
-  # ship a display that does not match its own source of truth.
-  generated-in-sync:
+  # Application: the generated panel must match its CSV source of truth, the CA
+  # liveness path must hold, and the image the RPM pins gets pushed here. Built
+  # once and reused for the smoke test, so nothing is compiled twice.
+  app:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Regenerate panel from CSVs
-        run: python3 tools/gen_panel.py
-      - name: Fail if committed output is stale
-        run: |
-          if ! git diff --exit-code -- static gateway/channels.json; then
-            echo "::error::static/ or gateway/channels.json is out of date."
-            echo "Run 'python3 tools/gen_panel.py' and commit the result."
-            exit 1
-          fi
 
-  smoke:
-    # End-to-end: real Channel Access between a caproto soft IOC and the
-    # gateway. Also asserts the liveness path, which is the one behaviour that
-    # must never regress -- a panel that holds stale green LEDs when the IOC
-    # dies is worse than a blank one.
-    runs-on: ubuntu-latest
-    needs: generated-in-sync
-    steps:
-      - uses: actions/checkout@v4
+      # The panel and the gateway channel list are both generated from the CSVs.
+      # A CSV edited without regenerating means the display disagrees with its
+      # own indicator map, so fail rather than ship that.
+      - name: Generated output is in sync
+        run: |
+          python3 tools/gen_panel.py
+          git diff --exit-code -- static gateway/channels.json
 
       - name: Build images
         run: |
@@ -146,66 +126,29 @@ jobs:
         if: always()
         run: docker logs tsrs-web 2>&1 | tail -40
 
-  publish:
-    needs: [generated-in-sync, smoke]
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
-            type=raw,value=latest,enable=${{ inputs.version != '' }}
+      # The tag the RPM unit pins comes from the spec, so the image and the
+      # package always name the same thing. Pushed only after the smoke test
+      # above has passed against this exact image.
+      - name: Push image
+        if: github.event_name != 'pull_request'
+        run: |
+          V=$(awk '/^%global specver/ {print $3}' packaging/tsrs-screen.spec)
+          docker tag tsrs-web:ci "$IMAGE:$V"
+          docker tag tsrs-web:ci "$IMAGE:latest"
+          docker push "$IMAGE:$V"
+          docker push "$IMAGE:latest"
 
-      - name: Build and push gateway
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          # amd64 only, on purpose: pyepics ships an x86-64 libca and the
-          # deployment targets are x86_64 EL9. An arm64 image would start and
-          # then die on the first CA call.
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # Ships the systemd unit + site config + CA probe as an RPM to the GHCR yum
-  # repo, so a new host is `dnf install tsrs-screen` instead of a hand-pasted
-  # unit file. Tag-triggered only: the RPM version IS the image tag, so building
-  # one off an untagged commit would pin the unit to an image that never exists.
-  # The RPM is built by the shared gemini-rtsw-ci pipeline, not by a script in
-  # this repo -- one build path for every Gemini package. profile: lightweight
-  # skips the EPICS toolchain, the rpm-repo dependency container and the dev
-  # image, none of which a noarch config package needs.
-  #
-  # register is false here: our NVRA is fixed by the spec, so every commit would
-  # otherwise overwrite the released tag with a dev build. Only release.yml sets
-  # it true.
-  rpm:
-    needs: [generated-in-sync, smoke]
+  # ---- gemini-rtsw-ci hook 1: build the RPM -------------------------------
+  build:
+    needs: app
     uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@lightweight
     secrets: inherit
     with:
@@ -213,8 +156,11 @@ jobs:
       el_version: "9"
       profile: lightweight
       spec_path: packaging/tsrs-screen.spec
-      register: ${{ inputs.register || false }}
-      # Checks the generic build cannot know about: the unit is pinned to this
-      # version's image, GEMINI_SITE resolves, an upgrade preserves
-      # /etc/sysconfig. OUT points at the shared pipeline's output directory.
       verify_cmd: OUT=$PWD/rpms ./packaging/verify-rpm.sh
+
+  # ---- gemini-rtsw-ci hook 2: publish rpm-repo:latest ---------------------
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request'
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@lightweight
+    secrets: inherit

@@ -191,38 +191,29 @@ python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS nee
 
 ## Releasing
 
-`%global specver` in `packaging/tsrs-screen.spec` is the single source of truth.
-Bump it, commit, then use any one of:
+Bump `%global specver` in `packaging/tsrs-screen.spec` and push. That's it —
+every push to `main` builds the RPM and publishes it to `rpm-repo`.
 
-- **Actions → release → Run workflow**
-- `git tag v<specver> && git push origin v<specver>`
-- `./packaging/release.sh` (from a laptop; `--dry-run` to preview)
+The `Release` carries the commit hash (`0.1.0-1.gitc628a3d.el9`), as every
+gemini-rtsw package does, so each build is a distinct NVRA and `rpm -q` names
+the exact commit a host is running. `Version` comes from `specver`, and the
+image tag matches it — the unit pins `tsrs_screen:<specver>`.
 
-No version is ever typed. All three read `specver`, and a tag that disagrees is
-rejected — what ships is only ever what the committed spec says.
+CI is the standard gemini-rtsw shape: a build hook and a publish hook into
+`gemini-rtsw-ci` (`profile: lightweight` — no EPICS toolchain, no rpm-repo
+dependency container, no dev image), plus one `app` job for the container this
+project ships, which the shared pipeline does not build.
 
-| Artifact | Identifier |
-|---|---|
-| RPM | `tsrs-screen-<specver>-1.el9.noarch` |
-| Image | `ghcr.io/gemini-rtsw/tsrs_screen:<specver>` (what the unit pins) |
-| Git tag | `v<specver>` |
-
-The RPM is built by **`gemini-rtsw-ci`** (submodule + reusable workflow) with
-`profile: lightweight` — no EPICS toolchain, no rpm-repo dependency container,
-no dev image. This repo holds no build script of its own; only the spec and
-`packaging/verify-rpm.sh`, whose checks the generic pipeline cannot know
-(image pin, site resolution, upgrade preserving `/etc/sysconfig`).
-
-`ci` runs on every push with `register: false` — builds and verifies, publishes
-nothing. Only `release` sets `register: true`, so a dev build can never
-overwrite a released NVRA.
-
-Locally, the same two commands CI runs:
+This repo owns no build script. Locally:
 
 ```bash
 ./gemini-rtsw-ci/build_rpm.sh --el 9 --profile lightweight --spec packaging/tsrs-screen.spec
 OUT=$PWD/rpms ./packaging/verify-rpm.sh
 ```
+
+`verify-rpm.sh` is what `verify_cmd` runs in CI — the checks a generic build
+cannot make: the unit is pinned to this version's image, `GEMINI_SITE` resolves,
+and an upgrade preserves `/etc/sysconfig`.
 
 Publishing uses the built-in `GITHUB_TOKEN`; this repo needs **Write** on the
 `rpm-repo` package under *Manage Actions access*.

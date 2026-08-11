@@ -10,13 +10,18 @@
 # tag cannot disagree and nobody types a version twice.
 %global specver 0.1.0
 
+# Commit hash in the Release, as every other gemini-rtsw package does. It makes
+# each build a distinct NVRA, so a dev build can never overwrite a released one
+# in the shared repo, and `rpm -q` names the exact commit a host is running.
+%define git_hash %(git rev-parse --short HEAD 2>/dev/null || echo nogit)
+
 # _version override exists only for verify-rpm.sh, which builds a throwaway
 # +1 package to test the upgrade path.
 %global appimage ghcr.io/gemini-rtsw/tsrs_screen
 
 Name:           tsrs-screen
 Version:        %{?_version}%{!?_version:%{specver}}
-Release:        1%{?dist}
+Release:        1.git%{git_hash}%{?dist}
 Summary:        TSRS status panel gateway (read-only EPICS CA bridge)
 
 License:        Proprietary
