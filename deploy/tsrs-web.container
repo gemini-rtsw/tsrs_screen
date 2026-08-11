@@ -12,6 +12,15 @@
 # survives a bridged/NAT network. With bridge networking and
 # EPICS_CA_AUTO_ADDR_LIST=YES, libca would derive the podman subnet instead and
 # silently resolve nothing -- the panel would show NO DATA forever with no error.
+#
+# This file assumes the host is ON the control VLAN (10.2.2.0/24), which is the
+# intended home for the entrance display node. Off-VLAN hosts cannot use the
+# broadcast at all and must switch to TCP name resolution:
+#     Environment=EPICS_CA_NAME_SERVERS=10.2.2.49:5064
+#     Environment=EPICS_CA_AUTO_ADDR_LIST=NO
+# and must NOT set EPICS_CA_ADDR_LIST. Unicast UDP to 10.2.2.49 does not work:
+# two IOCs share UDP 5064 there and the wrong one answers. See "Reaching the
+# IOC" in README.md and the long comment in deploy/tsrs-web.service.
 
 [Unit]
 Description=TSRS status panel gateway (read-only EPICS CA bridge)

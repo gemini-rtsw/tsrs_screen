@@ -11,11 +11,43 @@
 # --network host means NO PORT ISOLATION: if the host already has something on
 # TSRS_PORT the gateway exits 1 with "address already in use". On a shared
 # docker host, check with `ss -ltnp` and set TSRS_PORT to something free.
+# TSRS_PORT=8090 below, not the documented default 8080, because 8080 was
+# already taken on mkoswgdkr-lv1.
 #
-# --network host is REQUIRED, not a preference. EPICS_CA_ADDR_LIST below is a
-# *broadcast* address; CA name resolution and IOC beacons do not survive a
-# bridged/NAT network. On bridge networking the panel sits at NO DATA forever
-# with nothing in the log to explain it.
+# --network host is REQUIRED, not a preference. CA name resolution and IOC
+# beacons do not survive a bridged/NAT network. On bridge networking the panel
+# sits at NO DATA forever with nothing in the log to explain it.
+#
+# ---------------------------------------------------------------------------
+# CA ADDRESSING: pick the block that matches where this host lives.
+# As shipped this unit is configured for an OFF-VLAN host (mkoswgdkr-lv1,
+# 10.2.71.15). See "Reaching the IOC" in README.md before changing it.
+#
+# ON the control VLAN (10.2.2.0/24) -- the intended long-term home:
+#   -e EPICS_CA_ADDR_LIST="10.2.2.255 10.2.10.21" \
+#   -e EPICS_CA_AUTO_ADDR_LIST=YES \
+# Broadcast resolution reaches every IOC on the subnet. This is the normal
+# EPICS configuration and the one to use on the entrance display node.
+#
+# OFF the control VLAN (anything else, e.g. 10.2.71.0/24) -- active below:
+#   -e EPICS_CA_NAME_SERVERS=10.2.2.49:5064 \
+#   -e EPICS_CA_AUTO_ADDR_LIST=NO \
+# Broadcasts do not route, so 10.2.2.255 never arrives. Unicast UDP to
+# 10.2.2.49:5064 does NOT work either: mkosioc-lv1 runs two IOCs
+# (bfo-mk-ioc and toptica-mk-ioc) which both bind UDP 5064 with SO_REUSEADDR,
+# and a unicast datagram is delivered to only ONE of them -- in practice
+# toptica, which answers CA_PROTO_NOT_FOUND for every bfo: channel. TCP-based
+# name resolution sidesteps this because only one process can hold TCP 5064,
+# and on mkosioc-lv1 that is bfo-mk-ioc (verified 2026-08-11, pid 25611).
+#
+# FRAGILITY: that TCP ownership is decided by whichever IOC starts first. If
+# both restart and toptica wins the race, name resolution silently stops and
+# the panel goes to NO DATA with nothing in the log. The durable fix is a
+# pinned EPICS_CAS_SERVER_PORT for bfo-mk-ioc -- an IOC-side change, not ours.
+# Requires firewall: TCP 5064 (search + data) and UDP 5065 (beacons) to
+# 10.2.2.49. UDP needs stateful/conntrack return, since replies come back to
+# an ephemeral source port, not to 5064.
+# ---------------------------------------------------------------------------
 
 [Unit]
 Description=TSRS status panel gateway (read-only EPICS CA bridge)
@@ -42,10 +74,10 @@ ExecStart=/usr/bin/docker run --rm --name tsrs-web \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   -e TSRS_BIND=127.0.0.1 \
-  -e TSRS_PORT=8080 \
+  -e TSRS_PORT=8090 \
   -e TSRS_CA_BACKEND=pyepics \
-  -e EPICS_CA_ADDR_LIST="10.2.2.255 10.2.10.21" \
-  -e EPICS_CA_AUTO_ADDR_LIST=YES \
+  -e EPICS_CA_NAME_SERVERS=10.2.2.49:5064 \
+  -e EPICS_CA_AUTO_ADDR_LIST=NO \
   -e EPICS_CA_MAX_ARRAY_BYTES=160000 \
   -e TSRS_CA_WATCHDOG_S=60 \
   -e TSRS_LOGLEVEL=INFO \

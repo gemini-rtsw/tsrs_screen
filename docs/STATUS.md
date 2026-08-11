@@ -1,4 +1,4 @@
-# Status — 2026-08-10
+# Status — 2026-08-11
 
 Current state and open items. `CLAUDE.md` holds the durable invariants; this file
 changes as work progresses.
@@ -11,21 +11,36 @@ disconnect detected in ~1 s, native reconnect ~6 s, watchdog rebuild verified.
 **CI green path:** drift check → CA smoke test (pyepics on the x86_64 runner) →
 publish to `ghcr.io/gemini-rtsw/tsrs_screen` (amd64).
 
-**Deployed to `mkoswgdkr-lv1` (10.2.71.15)** via a systemd unit on port 8090. The
-gateway runs and serves, but `ca_connected: 0` — the host cannot reach the IOC:
+**Deployed to `mkoswgdkr-lv1` (10.2.71.15)** via a systemd unit on port 8090,
+and as of 2026-08-11 **CA connectivity is solved**. Firewall opened by ITOps
+(TCP/UDP 5064–5065 to `mkosioc-lv1`, 10.2.2.49) and verified working in both
+directions.
 
-```
-$ nc -zv 10.2.2.49 5064
-Ncat: No route to host.
-```
+The remaining failure after the firewall was an *addressing* problem, not a
+network one, and it is worth recording because it presents exactly like a
+firewall block:
 
-`mkoswgdkr-lv1` is a general Docker host outside the control VLAN. A firewall
-request is in flight for TCP/UDP 5064–5065 to `mkosioc-lv1` (10.2.2.49). **Not
-required if deployed on a control-VLAN host** — which is where this ends up
-anyway.
+- `mkoswgdkr-lv1` is on 10.2.71.0/24, so the shipped `EPICS_CA_ADDR_LIST=
+  10.2.2.255` broadcast never routes to it.
+- Falling back to unicast `EPICS_CA_ADDR_LIST=10.2.2.49` **also fails**.
+  `mkosioc-lv1` runs two IOCs (`bfo-mk-ioc` pid 25611, `toptica-mk-ioc` pid
+  20151) which both bind UDP 5064 with `SO_REUSEADDR`. Broadcast reaches both;
+  unicast reaches only one, and it is toptica — which answers
+  `CA_PROTO_NOT_FOUND` for every `bfo:` channel.
+- Fix: `EPICS_CA_NAME_SERVERS=10.2.2.49:5064` with `EPICS_CA_AUTO_ADDR_LIST=NO`
+  and no `EPICS_CA_ADDR_LIST`. TCP name resolution goes to whoever holds TCP
+  5064, and that is `bfo-mk-ioc`. Verified: `bfo:mcsStatus` connects, reads 1.
 
-The application path is proven on that host regardless: a foreground run loaded
-pyepics and subscribed to all 76 channels successfully.
+`deploy/tsrs-web.service` now ships this off-VLAN configuration;
+`deploy/tsrs-web.container` keeps the on-VLAN broadcast form. Both files
+document the other mode.
+
+**Known fragility introduced by this workaround:** TCP 5064 belongs to whichever
+IOC starts first. If both restart and toptica wins the race, name resolution
+stops silently and the panel goes to NO DATA with nothing in the log. The
+durable fix is a pinned `EPICS_CAS_SERVER_PORT` for `bfo-mk-ioc` — an IOC-side
+change owned by whoever runs `mkosioc-lv1`. Deploying on a control-VLAN host
+removes the problem entirely.
 
 ## Compliance findings vs. the 2015 design
 
@@ -70,13 +85,25 @@ typos in the 2015 spreadsheet). No action.
 - [ ] **Availability model** if the gateway centralises onto a shared Docker VM
 - [ ] **`caRepeater` missing from the image** — warning only, but it slows
       reconnect after an IOC restart, since beacons are how a client learns a
-      server came back
+      server came back. Confirmed on `mkoswgdkr-lv1`: *"The executable
+      caRepeater couldn't be located"*. `--read-only` and `--cap-drop ALL` also
+      prevent libca from spawning it. Test IOC-restart recovery deliberately
+      rather than discovering the gap during a real outage.
+- [ ] **Pin `EPICS_CAS_SERVER_PORT` for `bfo-mk-ioc`** with the `mkosioc-lv1`
+      owner, so off-VLAN clients stop depending on a TCP-5064 startup race
 - [ ] **`ExecStartPre=docker pull` runs as root** with no GHCR credentials, so
       auto-update on restart does not work
 
 ## Verified facts worth keeping
 
-- IOC: `mkosioc-lv1.hi.gemini.edu` = **10.2.2.49**, CA port 5064
+- IOC: `mkosioc-lv1.hi.gemini.edu` = **10.2.2.49**/24 (`ens192`), CA port 5064.
+  Runs **two** IOCs under procServ: `bfo-mk-ioc` (procServ telnet port 1237) and
+  `toptica-mk-ioc` (1238). `bfo-mk-ioc` holds TCP 5064; both share UDP 5064.
+  `dbl` on `bfo-mk-ioc` confirms all `bfo:` summary and `cond{1..7}bits` records
+  exist, so the five compliance-addition PVs are fields of records that are
+  present and should connect.
+- Panel host: `mkoswgdkr-lv1` = **10.2.71.15**/24 (`ens33`) — *not* on the
+  control VLAN, which is the root of all the addressing complexity above
 - Old EL7 display: `hbfbfotsrs-ld1`, running `css-1-7.el7.gemini` (built 2016) ,
   launched from `/etc/ITOps/tsrs-launcher.sh` (unversioned — get it into git)
 - On that host, only `bfo/bfo_overview.opi` had a recent atime; all 12 detail

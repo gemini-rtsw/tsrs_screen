@@ -25,15 +25,15 @@ docker login ghcr.io -u <gh-user>          # PAT with read:packages
 # 2. Install the service
 sudo curl -fsSL -o /etc/systemd/system/tsrs-web.service \
   https://raw.githubusercontent.com/gemini-rtsw/tsrs_screen/main/deploy/tsrs-web.service
-sudoedit /etc/systemd/system/tsrs-web.service    # check EPICS_CA_ADDR_LIST for your site
+sudoedit /etc/systemd/system/tsrs-web.service    # pick the CA addressing block -- see below
 sudo systemctl daemon-reload
 sudo systemctl enable --now tsrs-web
 
 # 3. Verify: want ca_with_values == ca_total
-curl -s localhost:8080/api/healthz | python3 -m json.tool
+curl -s localhost:8090/api/healthz | python3 -m json.tool
 ```
 
-Then browse to `http://localhost:8080`.
+Then browse to `http://localhost:8090`.
 
 ```bash
 systemctl status tsrs-web
@@ -41,23 +41,79 @@ journalctl -u tsrs-web -f
 sudo systemctl stop tsrs-web       # rollback; nothing else is touched
 ```
 
-`EPICS_CA_ADDR_LIST` in the unit is set for **Gemini North**
-(`10.2.2.255 10.2.10.21`). Change it for GS.
-
 Podman hosts: use `deploy/tsrs-web.container` (Quadlet) in
 `/etc/containers/systemd/` instead. Use one unit or the other, never both.
 
-Port 8080 by default. `--network host` means **no port isolation**, so on a
-shared docker host something may already hold it — the gateway then exits 1 with
-"address already in use". Check with `ss -ltnp` and set `TSRS_PORT` (and
-`TSRS_BIND`, default `127.0.0.1` in the unit) to something free.
+### Reaching the IOC
+
+The BFO IOC is `bfo-mk-ioc` on **`mkosioc-lv1` = 10.2.2.49**, CA port 5064.
+How you address it depends entirely on which VLAN the panel host is on, and
+getting this wrong is the single most likely reason for `ca_connected: 0`.
+
+**On the control VLAN (10.2.2.0/24)** — normal EPICS, use broadcast:
+
+```
+EPICS_CA_ADDR_LIST="10.2.2.255 10.2.10.21"
+EPICS_CA_AUTO_ADDR_LIST=YES
+```
+
+**Off the control VLAN** (e.g. `mkoswgdkr-lv1`, 10.2.71.15) — use TCP name
+resolution and do *not* set `EPICS_CA_ADDR_LIST` at all:
+
+```
+EPICS_CA_NAME_SERVERS=10.2.2.49:5064
+EPICS_CA_AUTO_ADDR_LIST=NO
+```
+
+Two traps here, both of which cost a day:
+
+1. **`10.2.2.255` is a broadcast and does not route.** From another subnet it
+   simply never arrives, and CA reports nothing — no error, no log line.
+2. **Unicast UDP to `10.2.2.49` does not work either**, which is the
+   counter-intuitive part. `mkosioc-lv1` runs *two* IOCs, `bfo-mk-ioc` and
+   `toptica-mk-ioc`. Both bind UDP 5064 with `SO_REUSEADDR`. A broadcast
+   datagram is delivered to every such socket; a **unicast** datagram is
+   delivered to only one — in practice toptica, which correctly answers
+   `CA_PROTO_NOT_FOUND` for every `bfo:` channel. The failure looks exactly
+   like a firewall problem and is not one.
+
+TCP name resolution avoids trap 2 because only one process can hold TCP 5064,
+and on `mkosioc-lv1` that is `bfo-mk-ioc` (verified 2026-08-11, pid 25611).
+
+**That last point is a known fragility, not a design.** TCP 5064 goes to
+whichever IOC starts first. If both restart and toptica wins, the panel goes to
+NO DATA and nothing in the log says why. The durable fix is a pinned
+`EPICS_CAS_SERVER_PORT` for `bfo-mk-ioc`, which is an IOC-side change owned by
+whoever runs `mkosioc-lv1`. Until then, prefer deploying on the control VLAN.
+
+Firewall for off-VLAN hosts: TCP 5064 (search *and* data) plus UDP 5065
+(beacons) to 10.2.2.49. The UDP rule must be stateful — search replies return
+to an ephemeral source port, not to 5064, so a rule pinned to 5064/5065 on both
+ends silently drops them.
+
+Gemini South: change these addresses for the CP site.
+
+To verify addressing before touching the unit:
+
+```bash
+docker run --rm --network host \
+  -e EPICS_CA_NAME_SERVERS=10.2.2.49:5064 -e EPICS_CA_AUTO_ADDR_LIST=NO \
+  ghcr.io/gemini-rtsw/tsrs_screen:latest \
+  python -c "import epics; pv=epics.PV('bfo:mcsStatus'); print(pv.wait_for_connection(timeout=10), pv.get())"
+```
+
+Port 8090 in the shipped unit (8080 was already taken on `mkoswgdkr-lv1`).
+`--network host` means **no port isolation**, so on a shared docker host
+something may already hold it — the gateway then exits 1 with "address already
+in use". Check with `ss -ltnp` and set `TSRS_PORT` (and `TSRS_BIND`, default
+`127.0.0.1` in the unit) to something free.
 
 ### Five things that will bite you
 
-1. **`--network host` is required, not preferred.** `EPICS_CA_ADDR_LIST` is a
-   *broadcast* address; CA name resolution and IOC beacons do not survive a
-   bridged/NAT network. On bridge networking the panel sits at NO DATA forever
-   with nothing in the log to explain why.
+1. **`--network host` is required, not preferred.** CA name resolution and IOC
+   beacons do not survive a bridged/NAT network. On bridge networking the panel
+   sits at NO DATA forever with nothing in the log to explain why. See
+   "Reaching the IOC" above — addressing is the most common deployment failure.
 2. **x86_64 only.** pyepics ships an x86-64 `libca`; on arm the container
    starts and then dies on the first CA call.
 3. **Never run the simulator on the control network.** It serves the same 68
