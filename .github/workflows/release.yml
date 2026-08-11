@@ -77,6 +77,16 @@ jobs:
     permissions:
       contents: write        # push the git tag
     steps:
+      # Checked first: without it the next step fails as "Input required and not
+      # supplied: token", which says nothing about which secret or why.
+      - name: Require RPM_REPO_TOKEN
+        env:
+          TOKEN: ${{ secrets.RPM_REPO_TOKEN }}
+        run: |
+          [ -n "$TOKEN" ] || {
+            echo "::error::RPM_REPO_TOKEN is not set. Settings -> Secrets and variables -> Actions -> New repository secret. Needs a CLASSIC PAT with write:packages, read:packages and repo -- fine-grained tokens do not reliably grant GHCR package writes."
+            exit 1; }
+
       - uses: actions/checkout@v4
 
       # The exact RPM ci.yml built and verified -- not a rebuild, so what is
