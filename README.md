@@ -198,7 +198,9 @@ python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS nee
    - `./packaging/release.sh` — same steps, same scripts, from a laptop
 
 No version is ever typed: it comes from the spec, so the RPM version, image tag
-and git tag cannot disagree. Each path builds the image, the RPM pinned to it,
+and git tag cannot disagree. `release.yml` calls `ci.yml` as a reusable
+workflow, so a release runs exactly the checks every commit runs and publishes
+the same artifact CI verified. Each path builds the image, the RPM pinned to it,
 publishes to `gemini-rtsw-repo` and tags `v<version>`. All refuse a version
 that is already released, or a `specver` with anything but digits and dots
 (`-` is RPM's version/release separator).

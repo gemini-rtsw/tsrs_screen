@@ -8,6 +8,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
+  # Called by release.yml so a release runs the SAME drift check, smoke test and
+  # image build as any other commit -- no second copy to drift out of step.
+  workflow_call:
+    inputs:
+      version:
+        description: "Release version; also tags the image. Empty on ordinary CI runs."
+        required: false
+        type: string
+
 env:
   REGISTRY: ghcr.io
   IMAGE: ${{ github.repository }}
@@ -158,6 +167,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=raw,value=latest,enable=${{ inputs.version != '' }}
 
       - name: Build and push gateway
         uses: docker/build-push-action@v6

@@ -1,5 +1,9 @@
 # Publish a release: image, RPM, git tag.
 #
+# The build itself is ci.yml, called as a reusable workflow, so a release runs
+# exactly the checks every commit runs. This file adds only what is specific to
+# releasing: resolve the version, register the RPM, tag.
+#
 # Actions -> release -> Run workflow. No inputs: the version comes from
 # `%global specver` in packaging/tsrs-screen.spec, so it is bumped in a commit
 # and reviewed like anything else. Typing it here would be a second copy to get
@@ -20,16 +24,16 @@ env:
   IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  release:
+  # Guards run before anything is built, so a bad version costs seconds.
+  version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write        # push the git tag
-      packages: write        # push the image
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tagged: ${{ steps.v.outputs.tagged }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0     # needs tags to reject an already-released version
-
       - name: Read version from the spec
         id: v
         run: |
@@ -46,9 +50,9 @@ jobs:
                 echo "::error::tag v$T does not match specver $V in packaging/tsrs-screen.spec"; exit 1; }
               echo "tagged=true" >> "$GITHUB_OUTPUT" ;;
             *)
-              # Re-releasing a version would republish the same NVRA, which dnf
-              # does not see as an upgrade -- it would look successful and change
-              # nothing on the hosts. Fail here instead.
+              # Re-releasing a version republishes the same NVRA, which dnf does
+              # not see as an upgrade -- it would look successful and change
+              # nothing on the hosts.
               if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
                 echo "::error::v$V is already released. Bump specver in packaging/tsrs-screen.spec."; exit 1; fi
               echo "tagged=false" >> "$GITHUB_OUTPUT" ;;
@@ -56,40 +60,31 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "Releasing **$V**" >> "$GITHUB_STEP_SUMMARY"
 
-      # Same generation checks CI runs -- a release must not be the one build
-      # that skipped them.
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Fail if generated output is stale
-        run: |
-          python3 tools/gen_panel.py
-          git diff --exit-code -- static gateway/channels.json
+  # Drift check, smoke test, image push, RPM build + verify -- all of it.
+  ci:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
 
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+  publish:
+    needs: [version, ci]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # push the git tag
+    steps:
+      - uses: actions/checkout@v4
 
-      # amd64 only: pyepics ships an x86-64 libca, and an arm64 image starts and
-      # then dies on the first CA call.
-      - name: Build and push the image
-        uses: docker/build-push-action@v6
+      # The exact RPM ci.yml built and verified -- not a rebuild, so what is
+      # published is what passed.
+      - uses: actions/download-artifact@v4
         with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.IMAGE }}:${{ steps.v.outputs.version }},${{ env.IMAGE }}:latest
-          cache-from: type=gha
-
-      # The same two scripts a developer runs locally.
-      - name: Build RPM
-        run: ./packaging/build-rpm.sh
-      - name: Verify RPM
-        run: ./packaging/verify-rpm.sh
+          name: tsrs-screen-rpm
+          path: rpmout
 
       - uses: actions/checkout@v4
         with:
@@ -107,7 +102,7 @@ jobs:
       # :latest rebuild is a read-modify-write on one shared multi-GB image.
       # gemini-rtsw-repo's own runner does that job.
       - name: Register the RPM
-        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/tsrs-screen-${{ steps.v.outputs.version }}-*.rpm
+        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/tsrs-screen-${{ needs.version.outputs.version }}-*.rpm
 
       - name: Publish :latest on the repo's runner
         env:
@@ -118,14 +113,9 @@ jobs:
       # attempted". Pushed with GITHUB_TOKEN, which deliberately does not
       # re-trigger workflows.
       - name: Tag the release
-        if: steps.v.outputs.tagged != 'true'
+        if: needs.version.outputs.tagged != 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.v.outputs.version }}" -m "Release v${{ steps.v.outputs.version }}"
-          git push origin "v${{ steps.v.outputs.version }}"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tsrs-screen-rpm-${{ steps.v.outputs.version }}
-          path: rpmout/tsrs-screen-${{ steps.v.outputs.version }}-*.rpm
+          git tag -a "v${{ needs.version.outputs.version }}" -m "Release v${{ needs.version.outputs.version }}"
+          git push origin "v${{ needs.version.outputs.version }}"
