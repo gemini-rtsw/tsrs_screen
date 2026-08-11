@@ -191,26 +191,15 @@ jobs:
         id: v
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # CI calls the same scripts a developer runs locally -- never a
+      # reimplementation of them. If these two lines pass on a laptop, they
+      # pass here, and a packaging change cannot be green in one and broken in
+      # the other.
       - name: Build RPM
-        run: |
-          mkdir -p rpmout
-          docker run --rm -v "$PWD":/src:ro -v "$PWD/rpmout":/out \
-            -e V=${{ steps.v.outputs.version }} rockylinux:9 bash -euxc '
-              dnf -y install rpm-build systemd-rpm-macros tar >/dev/null
-              mkdir -p /root/rpmbuild/SOURCES && cd /src
-              tar czf /root/rpmbuild/SOURCES/tsrs-screen-$V.tar.gz \
-                --transform "s,^,tsrs-screen-$V/," \
-                deploy/tsrs-web.service.in deploy/tsrs-web.sysconfig tools/ca_probe.py
-              rpmbuild -bb --define "_version $V" /src/packaging/tsrs-screen.spec
-              cp /root/rpmbuild/RPMS/noarch/*.rpm /out/'
-          ls -l rpmout
+        run: ./packaging/build-rpm.sh "${{ steps.v.outputs.version }}"
 
-      - name: Assert the unit is pinned to this version
-        run: |
-          docker run --rm -v "$PWD/rpmout":/out rockylinux:9 bash -euc '
-            rpm -i --nodeps /out/*.rpm
-            grep -q "^Environment=IMAGE=ghcr.io/gemini-rtsw/tsrs_screen:${{ steps.v.outputs.version }}$" \
-              /usr/lib/systemd/system/tsrs-web.service'
+      - name: Verify RPM
+        run: ./packaging/verify-rpm.sh "${{ steps.v.outputs.version }}"
 
       # upload-rpm.sh is used rather than reimplementing the scratch-tag push,
       # so changes to the repo's storage model reach us for free.
@@ -230,7 +219,7 @@ jobs:
       # :latest rebuild is a read-modify-write on one shared tag against a
       # multi-GB image. gemini-rtsw-repo's own runner does that job.
       - name: Register the RPM
-        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/*.rpm
+        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/tsrs-screen-${{ steps.v.outputs.version }}-*.rpm
 
       - name: Publish :latest on the repo's runner
         env:
@@ -240,4 +229,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: tsrs-screen-rpm
-          path: rpmout/*.rpm
+          path: rpmout/tsrs-screen-${{ steps.v.outputs.version }}-*.rpm

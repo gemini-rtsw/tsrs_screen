@@ -162,6 +162,27 @@ python3 tools/gen_panel.py     # CSVs -> static/ + gateway/channels.json
 python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS needed
 ```
 
+## Releasing
+
+`git tag v1.2.0 && git push --tags`. CI builds the image, then the RPM pinned to
+that same tag, and registers it with `gemini-rtsw-repo`.
+
+CI **calls the same two scripts** you run locally, so a green laptop means a
+green pipeline:
+
+```bash
+./packaging/build-rpm.sh 1.2.0     # -> rpmout/tsrs-screen-1.2.0-1.el9.noarch.rpm
+./packaging/verify-rpm.sh 1.2.0    # install, pin, upgrade/downgrade, unit parse
+```
+
+No args = a `0.0.0` dev build. Both run in a pinned `rockylinux:9.3` container
+with `--platform linux/amd64`, so an Apple Silicon laptop produces the same
+package as the runner. `verify-rpm.sh` builds a `+1` version itself to test that
+an upgrade moves the image pin while `/etc/sysconfig/tsrs-web` survives.
+
+Needs an `RPM_REPO_TOKEN` secret (`write:packages`, plus read on
+`gemini-rtsw-repo`) for the publish step.
+
 `reference/` holds the frozen 2015 design authority. PLC↔EPICS mapping, verified
 against six independent bits: `bfo:cond{N}bits.B{h}` ⇔ `PLC B3/(64 + (N-1)*16 + h)`.
 
