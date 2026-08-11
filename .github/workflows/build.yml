@@ -173,3 +173,71 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Ships the systemd unit + site config + CA probe as an RPM to the GHCR yum
+  # repo, so a new host is `dnf install tsrs-screen` instead of a hand-pasted
+  # unit file. Tag-triggered only: the RPM version IS the image tag, so building
+  # one off an untagged commit would pin the unit to an image that never exists.
+  rpm:
+    needs: [generated-in-sync, smoke, publish]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from the git tag
+        id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build RPM
+        run: |
+          mkdir -p rpmout
+          docker run --rm -v "$PWD":/src:ro -v "$PWD/rpmout":/out \
+            -e V=${{ steps.v.outputs.version }} rockylinux:9 bash -euxc '
+              dnf -y install rpm-build systemd-rpm-macros tar >/dev/null
+              mkdir -p /root/rpmbuild/SOURCES && cd /src
+              tar czf /root/rpmbuild/SOURCES/tsrs-screen-$V.tar.gz \
+                --transform "s,^,tsrs-screen-$V/," \
+                deploy/tsrs-web.service.in deploy/tsrs-web.sysconfig tools/ca_probe.py
+              rpmbuild -bb --define "_version $V" /src/packaging/tsrs-screen.spec
+              cp /root/rpmbuild/RPMS/noarch/*.rpm /out/'
+          ls -l rpmout
+
+      - name: Assert the unit is pinned to this version
+        run: |
+          docker run --rm -v "$PWD/rpmout":/out rockylinux:9 bash -euc '
+            rpm -i --nodeps /out/*.rpm
+            grep -q "^Environment=IMAGE=ghcr.io/gemini-rtsw/tsrs_screen:${{ steps.v.outputs.version }}$" \
+              /usr/lib/systemd/system/tsrs-web.service'
+
+      # upload-rpm.sh is used rather than reimplementing the scratch-tag push,
+      # so changes to the repo's storage model reach us for free.
+      - uses: actions/checkout@v4
+        with:
+          repository: gemini-rtsw/gemini-rtsw-repo
+          path: rpmrepo
+          token: ${{ secrets.RPM_REPO_TOKEN }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.RPM_REPO_TOKEN }}
+
+      # --tag-only: the scratch tag is the durable source of truth, and the
+      # :latest rebuild is a read-modify-write on one shared tag against a
+      # multi-GB image. gemini-rtsw-repo's own runner does that job.
+      - name: Register the RPM
+        run: ./rpmrepo/upload-rpm.sh --tag-only rpmout/*.rpm
+
+      - name: Publish :latest on the repo's runner
+        env:
+          GH_TOKEN: ${{ secrets.RPM_REPO_TOKEN }}
+        run: gh workflow run rebuild-latest -R gemini-rtsw/gemini-rtsw-repo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tsrs-screen-rpm
+          path: rpmout/*.rpm

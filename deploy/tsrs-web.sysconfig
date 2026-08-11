@@ -1,0 +1,35 @@
+# Site configuration for the TSRS panel gateway.  /etc/sysconfig/tsrs-web
+#
+# %config(noreplace): your edits survive `dnf upgrade`. A new package version
+# leaves this file alone and drops any changed default as tsrs-web.rpmnew.
+#
+# Passed to the container via `docker run --env-file`, which is NOT shell:
+#   - KEY=VALUE, one per line;  # comments and blank lines are fine
+#   - do NOT quote values -- quotes are taken literally, so
+#     EPICS_CA_ADDR_LIST="10.2.2.255" sets the address list to `"10.2.2.255"`
+#   - no variable expansion, no line continuations
+# A commented-out line is genuinely unset, which matters below.
+#
+# Verify any change before restarting:  tsrs-ca-probe <ioc-ip> bfo:mcsStatus
+# Background: "Reaching the IOC" in the README.
+
+# --- Listener -------------------------------------------------------------
+# --network host means no port isolation: check `ss -ltnp` for a free port.
+TSRS_BIND=127.0.0.1
+TSRS_PORT=8090
+
+# --- Channel Access addressing --------------------------------------------
+# Pick ONE of the two blocks. Getting this wrong is the top cause of
+# ca_connected: 0, and it fails silently -- no error, no log line.
+#
+# (a) Panel host is ON the IOC's subnet -- broadcast, the normal EPICS setup:
+#EPICS_CA_ADDR_LIST=10.2.2.255
+#EPICS_CA_AUTO_ADDR_LIST=YES
+#
+# (b) Panel host is on a DIFFERENT subnet -- TCP name resolution. Broadcasts do
+#     not route, and unicast UDP can reach the wrong IOC when several share
+#     UDP 5064 on one host. EPICS_CA_ADDR_LIST must stay unset here.
+EPICS_CA_NAME_SERVERS=10.2.2.49:5064
+EPICS_CA_AUTO_ADDR_LIST=NO
+
+EPICS_CA_MAX_ARRAY_BYTES=160000

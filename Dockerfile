@@ -34,6 +34,14 @@ COPY static /app/static
 COPY deploy /app/deploy
 COPY tools/ca_probe.py /app/tools/ca_probe.py
 
+# tsrs-web.service is generated from the .in template, exactly as the RPM does,
+# so there is one source for the unit and no chance of the two drifting. The
+# image pins :latest; the RPM pins its own version.
+RUN sed -e 's|@IMAGE@|ghcr.io/gemini-rtsw/tsrs_screen:latest|' \
+        /app/deploy/tsrs-web.service.in > /app/deploy/tsrs-web.service \
+    && rm /app/deploy/tsrs-web.service.in \
+    && ! grep -q '@IMAGE@' /app/deploy/tsrs-web.service
+
 ENV TSRS_CHANNELS=/app/channels.json \
     TSRS_CONFIG=/app/tsrs.config.json \
     TSRS_STATIC=/app/static \

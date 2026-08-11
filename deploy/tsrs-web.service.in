@@ -1,0 +1,59 @@
+# systemd unit for the TSRS panel gateway on a Docker-daemon host.
+# (deploy/tsrs-web.container is the podman/Quadlet equivalent -- use one, not both.)
+#
+# THIS FILE IS A TEMPLATE. @IMAGE@ is substituted at build time -- by the RPM
+# spec with the release version, and by the Dockerfile with :latest. Edit
+# tsrs-web.service.in, never a generated tsrs-web.service.
+#
+# Installed by the tsrs-screen RPM as /usr/lib/systemd/system/tsrs-web.service
+# and OWNED BY THE PACKAGE: an upgrade overwrites it, which is how a new
+# release moves you to a new image. Put nothing site-specific here --
+# /etc/sysconfig/tsrs-web is %config(noreplace) and survives upgrades.
+#
+# --network host is REQUIRED. CA name resolution and IOC beacons do not survive
+# a bridged/NAT network; on bridge networking the panel sits at NO DATA forever
+# with nothing in the log. It also means NO PORT ISOLATION -- check `ss -ltnp`
+# and set TSRS_PORT in /etc/sysconfig/tsrs-web if something already has the port.
+#
+# Foreground `docker run --rm`, deliberately NOT --restart=always: systemd owns
+# the lifecycle. With both, `systemctl stop` leaves the container running.
+
+[Unit]
+Description=TSRS status panel gateway (read-only EPICS CA bridge)
+Documentation=https://github.com/gemini-rtsw/tsrs_screen
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=0
+
+# Pinned to the release version, not :latest, so `rpm -q tsrs-screen` tells you
+# exactly what is running and a reboot cannot silently change it. Upgrade with
+# dnf; roll back with `dnf downgrade tsrs-screen`.
+Environment=IMAGE=@IMAGE@
+
+# Pull is best-effort: a registry outage must not stop a working local image
+# from starting. Drop the '-' prefix if you would rather fail loudly.
+ExecStartPre=-/usr/bin/docker pull ${IMAGE}
+ExecStartPre=-/usr/bin/docker rm -f tsrs-web
+
+# Site settings come from --env-file, so this unit is site-independent and the
+# package can own it. Flags that are policy rather than site config stay here.
+ExecStart=/usr/bin/docker run --rm --name tsrs-web \
+  --network host \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --env-file /etc/sysconfig/tsrs-web \
+  -e TSRS_CA_BACKEND=pyepics \
+  -e TSRS_CA_WATCHDOG_S=60 \
+  -e TSRS_LOGLEVEL=INFO \
+  ${IMAGE}
+
+ExecStop=/usr/bin/docker stop -t 10 tsrs-web
+
+[Install]
+WantedBy=multi-user.target

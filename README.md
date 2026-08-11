@@ -27,21 +27,36 @@ docker run --rm --network host ghcr.io/gemini-rtsw/tsrs_screen:latest \
   python /app/tools/ca_probe.py <ioc-ip> bfo:mcsStatus
 ```
 
-**2. Install.** Target hosts reach GHCR but **not github.com**, so the unit
-ships in the image. `docker` also grants root-equivalent writes, which covers
-restricted `sudo`.
+**2. Install — RPM (preferred).** From the [GHCR yum
+repo](https://github.com/gemini-rtsw/gemini-rtsw-repo). Serve it, then install:
 
 ```bash
-docker pull ghcr.io/gemini-rtsw/tsrs_screen:latest
+docker run -d --name rpm-repo -p 8081:8080 ghcr.io/gemini-rtsw/rpm-repo:latest
+sudo dnf config-manager --add-repo http://localhost:8081/rpm-repo/
+sudo dnf install tsrs-screen
+sudo vi /etc/sysconfig/tsrs-web        # IOC address + port; survives upgrades
+sudo systemctl enable --now tsrs-web
+```
+
+Port 8081 because the documented 8080 is often taken. The unit is pinned to the
+image tag matching the RPM version, so `rpm -q tsrs-screen` says exactly what
+runs, `dnf upgrade` moves it, and `dnf downgrade` is a real rollback.
+
+**Install — no RPM repo.** Target hosts reach GHCR but **not github.com**, so
+the unit also ships inside the app image; `docker` grants the root-equivalent
+write that covers restricted `sudo`:
+
+```bash
 docker run --rm --user 0 -v /etc/systemd/system:/out \
   ghcr.io/gemini-rtsw/tsrs_screen:latest \
   cp /app/deploy/tsrs-web.service /out/tsrs-web.service
-sudo systemctl edit --full tsrs-web     # set CA block + TSRS_PORT; --force --full to paste from scratch
+sudo systemctl edit --full tsrs-web    # --force --full to paste from scratch
 sudo systemctl daemon-reload && sudo systemctl enable --now tsrs-web
 ```
 
-Podman: use `/app/deploy/tsrs-web.container` in `/etc/containers/systemd/`.
-One unit or the other, never both.
+This path has no `/etc/sysconfig/tsrs-web`, so site settings go in the unit and
+you own the drift. Podman: `/app/deploy/tsrs-web.container` in
+`/etc/containers/systemd/`. One unit or the other, never both.
 
 **3. Verify.**
 
