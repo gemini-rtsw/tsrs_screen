@@ -7,38 +7,24 @@ no code that could add one — keep it that way.
 
 Serves REQ-TSRS-0210 (entrance screen) and REQ-TSRS-0211 (EPICS copy).
 
-## Deploy
-
-Target: **x86_64** host with the Docker daemon, ideally the display node itself.
-
-**1. Find your IOC.** None of these are constants — they differ at GS and change
-as machines are replaced.
-
-| Fact | How | GN, Aug 2026 |
-|---|---|---|
-| IOC host / address | ask controls; `getent hosts <host>` | `mkosioc-lv1` = `10.2.2.49` |
-| IOC subnet + broadcast | `ip -br addr` **on the IOC host** | `10.2.2.0/24`, `10.2.2.255` |
-| Panel host subnet | `ip -br addr` on the panel host | `10.2.71.0/24` — *different* |
-
-```bash
-python3 tools/ca_probe.py <ioc-ip> bfo:mcsStatus       # want: FOUND
-# no checkout on the host? it ships in the image:
-docker run --rm --network host ghcr.io/gemini-rtsw/tsrs_screen:latest \
-  python /app/tools/ca_probe.py <ioc-ip> bfo:mcsStatus
-```
-
-**2. Install — RPM (preferred).** From the [GHCR yum
-repo](https://github.com/gemini-rtsw/gemini-rtsw-repo). Serve it, then install:
+## Install
 
 ```bash
 docker run -d --name rpm-repo -p 8081:8080 ghcr.io/gemini-rtsw/rpm-repo:latest
 sudo dnf config-manager --add-repo http://localhost:8081/rpm-repo/
-sudo dnf install tsrs-screen
-sudo vi /etc/sysconfig/tsrs-web        # port + any host override; survives upgrades
+sudo dnf install --disablerepo='*' --enablerepo='*rpm-repo*' --nogpgcheck tsrs-screen
+sudo vi /etc/sysconfig/tsrs-web        # host overrides; survives upgrades
 sudo systemctl enable --now tsrs-web
+curl -s localhost:8090/api/healthz | python3 -m json.tool    # want ca_with_values == ca_total
 ```
 
-**Upgrading.** The repo container serves the repodata it was pulled with, so
+Port 8081 because 8080 is often taken. `--disablerepo` skips the site repos,
+unreachable from some hosts; `--nogpgcheck` because the RPM is unsigned.
+
+The unit is pinned to the image tag matching the RPM version, so `rpm -q
+tsrs-screen` says exactly what runs and `dnf downgrade` is a real rollback.
+
+**Upgrade.** The repo container serves the repodata it was pulled with, so
 replace it or dnf will not see the new version:
 
 ```bash
@@ -46,129 +32,121 @@ docker pull ghcr.io/gemini-rtsw/rpm-repo:latest
 docker rm -f rpm-repo && docker run -d --name rpm-repo -p 8081:8080 ghcr.io/gemini-rtsw/rpm-repo:latest
 sudo dnf upgrade --refresh --disablerepo='*' --enablerepo='*rpm-repo*' --nogpgcheck tsrs-screen
 sudo systemctl restart tsrs-web
-rpm -q tsrs-screen && docker ps --format '{{.Names}}\t{{.Image}}' | grep tsrs
 ```
 
-`--refresh` matters: dnf caches repodata per repo and reuses it even after the
-container behind it changed. Your `/etc/sysconfig/tsrs-web` edits survive
-(`%config(noreplace)`); a changed packaged default arrives as `.rpmnew`.
+Your `/etc/sysconfig/tsrs-web` edits survive (`%config(noreplace)`); a changed
+packaged default arrives as `.rpmnew`.
 
-Port 8081 because the documented 8080 is often taken. The unit is pinned to the
-image tag matching the RPM version, so `rpm -q tsrs-screen` says exactly what
-runs, `dnf upgrade` moves it, and `dnf downgrade` is a real rollback.
-
-**Install — no RPM repo.** Target hosts reach GHCR but **not github.com**, so
-the unit also ships inside the app image; `docker` grants the root-equivalent
-write that covers restricted `sudo`:
+**The unit pulls as root**, so root needs read access to the image. Simplest is
+a public package; otherwise `docker login` as yourself and copy the credential:
 
 ```bash
-docker run --rm --user 0 -v /etc/systemd/system:/out \
-  ghcr.io/gemini-rtsw/tsrs_screen:latest \
-  cp /app/deploy/tsrs-web.service /out/tsrs-web.service
-sudo systemctl edit --full tsrs-web    # --force --full to paste from scratch
-sudo systemctl daemon-reload && sudo systemctl enable --now tsrs-web
+docker run --rm --user 0 -v /root:/r -v "$HOME/.docker/config.json":/c:ro \
+  ghcr.io/gemini-rtsw/tsrs_screen:latest sh -c 'mkdir -p /r/.docker && cp /c /r/.docker/config.json'
 ```
 
-This path has no `/etc/sysconfig/tsrs-web`, so site settings go in the unit and
-you own the drift. Podman: `/app/deploy/tsrs-web.container` in
-`/etc/containers/systemd/`. One unit or the other, never both.
+## Configuration
 
-**3. Verify.**
+Everything host-specific lives in `/etc/sysconfig/tsrs-web`. The unit is
+package-owned and carries no site settings.
 
-```bash
-curl -s localhost:8090/api/healthz | python3 -m json.tool   # ca_with_values == ca_total (76/76 at GN)
-docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' tsrs-web   # must be "no"
-sudo systemctl stop tsrs-web            # rollback; nothing else touched
-```
+| Setting | Default | Change when |
+|---|---|---|
+| `TSRS_BIND` | `127.0.0.1` | reaching the panel from another machine |
+| `TSRS_PORT` | `8090` | the port is taken (`ss -ltnp`) |
+| `TSRS_SITE` | *(unset)* | `GEMINI_SITE` is absent or wrong here |
+| `EPICS_CA_*` | from the site file | the host is not on the IOC's subnet |
 
-Restart policy must be `no` — otherwise the daemon and systemd fight over the
-container at boot. A real reboot is the only proof it comes back.
+At each start `resolve-site.sh` picks `/usr/share/tsrs-screen/site-<SITE>.env`
+and merges your file on top into `/run/tsrs-web.env` — last value wins. Site
+order: `TSRS_SITE` → `$GEMINI_SITE` → a `GEMINI_SITE=` line in
+`/etc/profile.d/*.sh` → **`MK`**. `cat /run/tsrs-web.env` shows what resolved.
+
+⚠️ **CP is not commissioned.** `site-CP.env` carries `TSRS_SITE_UNCONFIGURED=1`
+and the service refuses to start there rather than fall back to MK — a readiness
+screen from the wrong mountain is worse than none. Fill in the CP addresses,
+verify with `tsrs-ca-probe`, delete that line. The `bfo:` prefix is baked into
+the CSVs, so a different prefix means regenerating them, not a setting.
 
 ## Reaching the IOC
 
 The top cause of `ca_connected: 0`, and it fails silently.
 
-The site file default assumes the panel host is on the IOC's subnet. Override in
-`/etc/sysconfig/tsrs-web` if not:
-
-| Panel host | Config |
+| Panel host | `/etc/sysconfig/tsrs-web` |
 |---|---|
-| Same subnet as IOC | site-file default — nothing to do |
+| Same subnet as the IOC | nothing — the site file default is right |
 | Different subnet | `EPICS_CA_ADDR_LIST=` (blank it), `EPICS_CA_NAME_SERVERS=<ioc-ip>:5064`, `EPICS_CA_AUTO_ADDR_LIST=NO` |
 
-Three traps:
+Check before changing anything: `tsrs-ca-probe <ioc-ip> bfo:mcsStatus` — wants
+`FOUND`. Three traps:
 
-- **Broadcasts don't route.** From another subnet the broadcast never arrives.
-- **Unicast UDP can hit the wrong IOC.** An IOC host often runs several IOCs all
-  bound to UDP 5064 with `SO_REUSEADDR`; broadcast reaches all, unicast reaches
-  one. The wrong one answers `NOT_FOUND` — looks exactly like a firewall block.
-  TCP name resolution avoids this: only one process holds TCP 5064
-  (`ss -lntup | grep 5064` — must be the BFO IOC).
-- **Cross-subnet firewall** needs TCP 5064 (search + data) and UDP 5065
-  (beacons), and the UDP rule **must be stateful** — replies return to an
-  ephemeral source port, not 5064. `ca_probe.py` prints that port.
+- **Broadcasts don't route.** From another subnet it never arrives.
+- **Unicast UDP can reach the wrong IOC.** Several IOCs share UDP 5064 on one
+  host; broadcast reaches all, unicast reaches one. The wrong one answers
+  `NOT_FOUND`, which looks exactly like a firewall block. TCP name resolution
+  avoids it — only one process holds TCP 5064 (`ss -lntup | grep 5064`).
+- **Cross-subnet firewall** needs TCP 5064 and UDP 5065, and the UDP rule must
+  be **stateful** — replies return to an ephemeral port, which `tsrs-ca-probe`
+  prints.
 
 ⚠️ TCP 5064 goes to whichever IOC starts first. If the other wins after a
-restart, the panel goes to NO DATA with nothing in the log. Durable fix is a
-pinned `EPICS_CAS_SERVER_PORT` on the IOC side; prefer the IOC's own subnet.
+restart the panel goes to NO DATA with nothing in the log. The durable fix is a
+pinned `EPICS_CAS_SERVER_PORT` on the IOC side.
 
-## Sites
+GN: IOC `mkosioc-lv1` = `10.2.2.49`, subnet `10.2.2.0/24`.
 
-One RPM serves both telescopes. At start, `resolve-site.sh` picks the address
-set from `GEMINI_SITE` and merges it with your host overrides:
-
-```
-/usr/share/tsrs-screen/site-MK.env   package-owned site facts (upgrades update these)
-/etc/sysconfig/tsrs-web              host overrides, %config(noreplace), WINS
-        ↓  merged at every start
-/run/tsrs-web.env                    what the container actually got
-```
-
-Site is resolved first-match: `TSRS_SITE` in `/etc/sysconfig/tsrs-web` →
-`$GEMINI_SITE` → a `GEMINI_SITE=` assignment scraped from `/etc/profile.d/*.sh`
-or `/etc/environment` → **`MK`**. The scrape exists because `GEMINI_SITE` is a
-login-shell variable and systemd services never see it; the assignment is
-scraped rather than sourced, so nothing else in those scripts runs.
-
-⚠️ **CP is not commissioned.** `site-CP.env` carries
-`TSRS_SITE_UNCONFIGURED=1` and the service refuses to start there. That is
-deliberate: falling back to MK would render a readiness screen from the wrong
-mountain. Fill in the CP addresses, verify with `tsrs-ca-probe`, delete that
-line.
-
-The `bfo:` prefix is still baked into `tsrs_indicators.csv`,
-`compliance_additions.csv` and `tsrs.config.json` — **not** a config flag. If CP
-uses a different prefix, the CSVs must be regenerated from CP's `.opi` files;
-no site file can substitute.
-
-`cat /run/tsrs-web.env` after a start shows exactly what was resolved.
-
-## Gotchas
-
-- **`--network host` is required.** CA name resolution and beacons don't survive
-  bridge/NAT — panel sits at NO DATA with nothing in the log.
-- **No port isolation.** Unit ships `TSRS_PORT=8090` because 8080 was taken.
-  Check `ss -ltnp` first.
-- **x86_64 only.** pyepics bundles an x86-64 `libca`; arm dies on first CA call.
-- **Never run the simulator on the control network** — duplicate channel names
-  break resolution for the real screen.
-- **`docker pull` in the unit runs as root**, which has no GHCR credentials, so
-  unattended reboots won't pick up new images. `sudo docker login ghcr.io` once.
-- **Parallel-run against CS-Studio before cutover.** Both are read-only, so it's
-  free, and it's the only real correctness check.
-
-## Local development
+## Testing
 
 ```bash
 docker-compose up -d --build      # simulator + gateway
-open http://localhost:8080
+open http://localhost:8080        # dev stack is 8080, not 8090
+curl -s localhost:8080/api/healthz | python3 -m json.tool   # want 76/76
 ```
 
-**The test that matters:** `docker stop tsrs-sim`. Within ~1 s every indicator
-must go to a hatched **NO DATA** pill with a red banner. Values must go to
-`None`, never to their last-known state, and never fall through to "Not Ready" —
-a comms failure must not be able to fake a plant condition in either direction.
-`docker start tsrs-sim` recovers in ~6 s.
+The simulator serves all 76 channels over real Channel Access, so the gateway
+exercises the actual CA client path rather than a mock. ~8% of bits read Not
+Ready, rotating every 6 s so every indicator gets exercised, and Observatory
+Mode cycles Summit → Standby → Base. To hold one mode, set `--period 86400` in
+`docker-compose.yml`.
+
+**The test that matters:**
+
+```bash
+docker stop tsrs-sim
+```
+
+Within ~1 s every indicator must go to a hatched **NO DATA** pill with a red
+banner. Values must go to `None`, never to their last-known state, and never
+fall through to "Not Ready" — a comms failure must not be able to fake a plant
+condition in either direction. `docker start tsrs-sim` recovers in ~6 s.
+
+After editing `static/` or the CSVs, rebuild or you are testing the old panel:
+`docker-compose up -d --build gateway`.
+
+⚠️ **Never run the simulator on the control network.** It serves the same
+channel names and would break CA name resolution for the real screen.
+
+Test the package itself:
+
+```bash
+./gemini-rtsw-ci/build_rpm.sh --el 9 --profile lightweight --spec packaging/tsrs-screen.spec
+OUT=$PWD/rpms ./packaging/verify-rpm.sh
+```
+
+`verify-rpm.sh` is what CI runs: image pin matches the version, sysconfig is
+`%config(noreplace)`, an upgrade moves the pin while keeping host edits, a
+downgrade rolls back, site resolution works, the unit parses.
+
+## Releasing
+
+Bump `%global specver` in `packaging/tsrs-screen.spec` and push. Every push to
+`main` builds and publishes the RPM and the image.
+
+`Release` carries the commit hash (`0.4.0-1.gite3ef005.el9`), so each build is a
+distinct NVRA and `rpm -q` names the exact commit deployed.
+
+CI is the standard gemini-rtsw pipeline — a build hook and a publish hook into
+`gemini-rtsw-ci` with `profile: lightweight`. This repo owns no build script.
 
 ## How it works
 
@@ -187,16 +165,20 @@ connection state per channel, gateway reachability for the whole panel, and
 `TSRS_CA_WATCHDOG_S` (60 s) at *zero* connected channels — zero, never partial,
 because partial is a plant condition. Climbing `ca_rebuilds` = IOC unreachable.
 
+**Caching.** `style.css` and `app.js` carry a content hash and may be cached
+forever; `index.html` is served `no-store` because it names those URLs. Without
+that a kiosk sits on an old build indefinitely.
+
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/status` | channel readings, mode inputs, heartbeat |
-| `GET /api/healthz` | **process** liveness. `ok` is not CA connectivity — a dead IOC is not a sick gateway. CA state reported as `ca_connected` / `ca_ok`. |
+| `GET /api/healthz` | **process** liveness. `ok` is not CA connectivity — a dead IOC is not a sick gateway. CA state is reported as `ca_connected` / `ca_ok`. |
 
 ## Source of truth
 
 `tsrs_indicators.csv` — 82 indicators, 12 screens, 68 PVs, extracted from the
-as-built `.opi` files. Panel and channel list are both generated from it, so
-they cannot drift (CI fails on stale output).
+as-built `.opi` files. The panel and the channel list are both generated from
+it, so they cannot drift (CI fails on stale output).
 
 ```bash
 python3 tools/extract_opi.py   # .opi -> tsrs_indicators.csv (needs cssapp alongside)
@@ -204,71 +186,41 @@ python3 tools/gen_panel.py     # CSVs -> static/ + gateway/channels.json
 python3 tools/ca_probe.py      # "does this host serve this PV?" -- no EPICS needed
 ```
 
-## Releasing
-
-Bump `%global specver` in `packaging/tsrs-screen.spec` and push. Every push to
-`main` builds the RPM and publishes it to `rpm-repo`.
-
-`Release` carries the commit hash (`0.1.0-1.gitde096e3.el9`), as every
-gemini-rtsw package does, so each build is a distinct NVRA and `rpm -q` names
-the exact commit a host is running. The unit pins
-`ghcr.io/gemini-rtsw/tsrs_screen:<specver>`.
-
-CI is the standard gemini-rtsw pipeline — a build hook and a publish hook into
-`gemini-rtsw-ci`, with `profile: lightweight` (no EPICS toolchain, no rpm-repo
-dependency container, no dev image). This repo owns no build script.
-
-```bash
-./gemini-rtsw-ci/build_rpm.sh --el 9 --profile lightweight --spec packaging/tsrs-screen.spec
-OUT=$PWD/rpms ./packaging/verify-rpm.sh
-```
-
-`verify-rpm.sh` is what `verify_cmd` runs in CI: the unit is pinned to this
-version's image, `GEMINI_SITE` resolves, and an upgrade preserves
-`/etc/sysconfig`.
-
-The application image is built and pushed by the same run, from `app_image:
-Dockerfile`, tagged `:<specver>`, `:<specver>-git<hash>` and `:latest` — the tag
-comes from the spec, so the image and the RPM cannot drift. It is pushed
-*before* the RPM registers, so a published RPM can never pin an image that does
-not exist.
-
-Publishing uses the built-in `GITHUB_TOKEN`; this repo needs **Write** on the
-`rpm-repo` package under *Manage Actions access*.
+`reference/` holds the frozen 2015 design authority. PLC↔EPICS mapping, verified
+against six independent bits: `bfo:cond{N}bits.B{h}` ⇔ `PLC B3/(64 + (N-1)*16 + h)`.
 
 ## Compliance findings
 
-Gaps vs. the 2015 design. 1 and 2 are closed by `compliance_additions.csv` (kept
-separate so "as-built" and "proposed" never blur); all 76 channels connect on
-the real IOC, so no IOC change was needed.
+Gaps vs. the 2015 design. 1 and 2 are closed by `compliance_additions.csv`; all
+76 channels connect on the real IOC, so no IOC change was needed.
 
 1. **LOTO drill-down incomplete** — `LOTO OK` is fed by 7 bits, the screen showed
    4. An operator could not see three possible causes of `LOTO: Not Ready`.
-2. **Two summary indicators absent** — `Lights OK` and `PLC OK`. Design defines
-   13 summary bits; the screen implemented 11.
-3. **No PLC heartbeat — OPEN, and it blocks sign-off.** The design names a
-   heartbeat bit but never assigned it an address. Without it, a PLC that is
-   alive on the network but no longer scanning is undetectable: CA stays
-   connected and values persist. Get the address from a controls engineer and
-   set `heartbeat_pv` in `tsrs.config.json` — gateway and panel already
-   implement the check. **Until then the screen can hold stale values in this
-   one failure mode.** Do not paper over it.
+2. **Two summary indicators absent** — `Lights OK` and `PLC OK`. The design
+   defines 13 summary bits; the screen implemented 11.
+3. **No PLC heartbeat — OPEN, blocks sign-off.** The design names a heartbeat
+   bit but never assigned it an address. Without it a PLC alive on the network
+   but no longer scanning is undetectable: CA stays connected and values
+   persist. Get the address, set `heartbeat_pv` in `tsrs.config.json` — gateway
+   and panel already implement the check. **Until then the screen can hold stale
+   values in this one failure mode.**
 
 ## Scope
 
 `hbfbfotsrs-ld1` is the Hilo Base copy (REQ-0211). REQ-0210 puts a screen at the
-*observatory entrance* on the summit — very likely a second EL7 host, and the
-safety-relevant one. Sweep `rpm -q cssapp` across display nodes before sizing a
-rollout. GS also deploys `cssapp`; confirm whether it is in scope.
+*observatory entrance* — very likely a second EL7 host, and the safety-relevant
+one. Sweep `rpm -q cssapp` across display nodes before sizing a rollout.
 
 ## Layout
 
 ```
-tools/extract_opi.py       .opi -> tsrs_indicators.csv
+tsrs_indicators.csv        source of truth: 82 indicators
 tools/gen_panel.py         CSVs -> static/ + gateway/channels.json
+tools/extract_opi.py       .opi -> tsrs_indicators.csv
 tools/ca_probe.py          CA reachability probe (stdlib only)
 gateway/tsrs_web/app.py    FastAPI + CA monitors (read-only)
 sim/tsrs_sim.py            caproto soft IOC, 76 channels
-deploy/                    systemd unit + podman Quadlet
+deploy/                    unit template, site files, site resolver
+packaging/                 spec + verify script
 reference/                 2015 design authority, frozen
 ```

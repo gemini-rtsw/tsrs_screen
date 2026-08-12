@@ -5,7 +5,7 @@
 # Channel Access finds channels by UDP. On the real network the site uses a
 # *broadcast* address (EPICS_CA_ADDR_LIST=10.2.2.255), which cannot cross a
 # bridged/NAT network -- production therefore requires host networking (see
-# deploy/tsrs-web.container).
+# deploy/tsrs-web.service.in).
 #
 # The dev stack defaults to TSRS_CA_BACKEND=caproto so it runs on arm64 laptops
 # (pyepics bundles an x86-64 libca only). Production uses pyepics -- override
@@ -23,7 +23,6 @@
 # reconnect even after the IOC returns. An IP cannot fail to resolve, and it
 # also mirrors production, where EPICS_CA_ADDR_LIST holds literal addresses.
 
-version: "3.8"
 
 services:
   sim:
