@@ -14,6 +14,13 @@
 
 # --- Listener -------------------------------------------------------------
 # --network host means no port isolation: check `ss -ltnp` for a free port.
+#
+# Loopback by default because the intended home is the entrance display node,
+# which runs the browser itself -- the failure domain then stays what it is
+# today, one box. Set 0.0.0.0 to reach the panel from another machine (a shared
+# docker host, or a parallel-run against CS-Studio). That is a deliberate
+# widening: the panel is read-only, but it is unauthenticated on every
+# interface, so decide it rather than inherit it.
 TSRS_BIND=127.0.0.1
 TSRS_PORT=8090
 
