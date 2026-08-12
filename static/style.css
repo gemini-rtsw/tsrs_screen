@@ -11,12 +11,16 @@
   --stale: #9aa0b4; --stale-fg: #23262f;
   --warn: #b35c00;
 
-  /* Summit-mode wash. Desaturated on purpose: operators sit in front of this
-     all day, and a saturated red would both fatigue them and compete with the
-     Not Ready pills, which is the one thing that must stay loudest. Light
-     enough that body text keeps well over 7:1 contrast. */
+  /* Mode washes. Desaturated on purpose: operators sit in front of this all
+     day, and saturated colour would both fatigue them and compete with the Not
+     Ready pills, which must stay the loudest thing on screen. All keep body
+     text well over 7:1 contrast.
+     Base is deliberately untinted -- it is the ordinary state, and a screen
+     that is always coloured says nothing by being coloured. */
   --bg-summit: #f2dede;
   --edge-summit: #b3403f;
+  --bg-standby: #f6eeda;
+  --edge-standby: #8a6410;
 }
 * { box-sizing: border-box; }
 
@@ -43,6 +47,9 @@ body { transition: background-color .6s ease; }
 body[data-mode="summit"] { background: var(--bg-summit); }
 body[data-mode="summit"] main { border-top: 3px solid var(--edge-summit); }
 body[data-mode="summit"] .mode-val { color: var(--edge-summit); }
+body[data-mode="standby"] { background: var(--bg-standby); }
+body[data-mode="standby"] main { border-top: 3px solid var(--edge-standby); }
+body[data-mode="standby"] .mode-val { color: var(--edge-standby); }
 
 .linkdown {
   background: #b00000; color: #fff; padding: .65rem 1rem;
