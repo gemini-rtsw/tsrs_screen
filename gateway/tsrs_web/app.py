@@ -350,8 +350,26 @@ def healthz():
             "ca_rebuilds": monitor.rebuilds, "heartbeat": hb}
 
 
+class _NoCacheHTML(StaticFiles):
+    """Serve index.html with no-store; everything else may be cached forever.
+
+    style.css and app.js carry a content hash in their URL, so they are safe to
+    cache indefinitely -- but index.html is what *names* those URLs, and it has
+    no version of its own. A cached index.html therefore pins a browser to the
+    asset versions of whatever deploy it last saw, which is how a fixed panel
+    kept showing the old one until someone hard-refreshed. On a kiosk nobody
+    ever does, so the display would silently stay on an old build forever.
+    """
+
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        if path in ("", ".", "index.html") or path.endswith(".html"):
+            resp.headers["Cache-Control"] = "no-store, must-revalidate"
+        return resp
+
+
 if STATIC.is_dir():
-    app.mount("/", StaticFiles(directory=str(STATIC), html=True), name="static")
+    app.mount("/", _NoCacheHTML(directory=str(STATIC), html=True), name="static")
 else:  # pragma: no cover - only when the panel has not been generated yet
     @app.get("/")
     def _no_static():
