@@ -10,6 +10,13 @@
   --bad-1: #ff8a8a; --bad-2: #e00000; --bad-fg: #2b0606;
   --stale: #9aa0b4; --stale-fg: #23262f;
   --warn: #b35c00;
+
+  /* Summit-mode wash. Desaturated on purpose: operators sit in front of this
+     all day, and a saturated red would both fatigue them and compete with the
+     Not Ready pills, which is the one thing that must stay loudest. Light
+     enough that body text keeps well over 7:1 contrast. */
+  --bg-summit: #f2dede;
+  --edge-summit: #b3403f;
 }
 * { box-sizing: border-box; }
 
@@ -29,6 +36,13 @@ body {
   display: flex; flex-direction: column;
 }
 main { flex: 1; padding: 1.2rem 1.4rem; overflow-y: auto; }
+
+/* Mode tint. Transition is slow on purpose -- an abrupt full-screen flip in
+   peripheral vision reads as an alarm, and this is a state, not an event. */
+body { transition: background-color .6s ease; }
+body[data-mode="summit"] { background: var(--bg-summit); }
+body[data-mode="summit"] main { border-top: 3px solid var(--edge-summit); }
+body[data-mode="summit"] .mode-val { color: var(--edge-summit); }
 
 .linkdown {
   background: #b00000; color: #fff; padding: .65rem 1rem;

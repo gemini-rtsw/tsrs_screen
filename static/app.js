@@ -50,6 +50,7 @@ function allStale(detail) {
   const m = document.getElementById('obsmode');
   m.textContent = 'NO DATA';
   m.dataset.state = 'stale';
+  document.body.dataset.mode = '';
 }
 
 async function tick() {
@@ -96,6 +97,11 @@ async function tick() {
   }
   m.textContent = !modeFresh ? 'NO DATA' : (mode || 'Unknown');
   m.dataset.state = modeFresh ? 'ok' : 'stale';
+
+  // Whole-screen tint for Observatory Mode, so the mode is readable from
+  // across the room without reading anything. Only set when the mode is
+  // actually known: a comms failure must never be able to imply a mode.
+  document.body.dataset.mode = modeFresh && mode ? mode.toLowerCase() : '';
 
   // Optional PLC heartbeat (see NOTE ON LIVENESS). Absent until configured.
   const hb = data.heartbeat;
