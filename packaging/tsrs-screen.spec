@@ -8,7 +8,7 @@
 # THE VERSION LIVES HERE. Bump specver in a commit, then run the `release`
 # workflow -- it reads this value, so the RPM version, the image tag and the git
 # tag cannot disagree and nobody types a version twice.
-%global specver 0.3.0
+%global specver 0.4.0
 
 # Commit hash in the Release, as every other gemini-rtsw package does. It makes
 # each build a distinct NVRA, so a dev build can never overwrite a released one

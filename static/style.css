@@ -11,16 +11,14 @@
   --stale: #9aa0b4; --stale-fg: #23262f;
   --warn: #b35c00;
 
-  /* Mode washes. Desaturated on purpose: operators sit in front of this all
-     day, and saturated colour would both fatigue them and compete with the Not
-     Ready pills, which must stay the loudest thing on screen. All keep body
-     text well over 7:1 contrast.
-     Base is deliberately untinted -- it is the ordinary state, and a screen
-     that is always coloured says nothing by being coloured. */
-  --bg-summit: #f2dede;
-  --edge-summit: #b3403f;
-  --bg-standby: #f6eeda;
-  --edge-standby: #8a6410;
+  /* Summit wash. ONLY Summit is coloured: it is the state that matters, and
+     once the summit crew has left the mountain it cannot easily be changed, so
+     the screen must make it unmistakable from across the room. Colouring the
+     other modes too would dilute exactly that signal.
+     Still light enough for black body text (~7:1), and the white indicator
+     cards keep the Ready / Not Ready pills clearly separated from it. */
+  --bg-summit: #d78f8f;
+  --edge-summit: #7a1f1f;
 }
 * { box-sizing: border-box; }
 
@@ -47,9 +45,6 @@ body { transition: background-color .6s ease; }
 body[data-mode="summit"] { background: var(--bg-summit); }
 body[data-mode="summit"] main { border-top: 3px solid var(--edge-summit); }
 body[data-mode="summit"] .mode-val { color: var(--edge-summit); }
-body[data-mode="standby"] { background: var(--bg-standby); }
-body[data-mode="standby"] main { border-top: 3px solid var(--edge-standby); }
-body[data-mode="standby"] .mode-val { color: var(--edge-standby); }
 
 .linkdown {
   background: #b00000; color: #fff; padding: .65rem 1rem;
