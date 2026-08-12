@@ -38,6 +38,21 @@ sudo vi /etc/sysconfig/tsrs-web        # port + any host override; survives upgr
 sudo systemctl enable --now tsrs-web
 ```
 
+**Upgrading.** The repo container serves the repodata it was pulled with, so
+replace it or dnf will not see the new version:
+
+```bash
+docker pull ghcr.io/gemini-rtsw/rpm-repo:latest
+docker rm -f rpm-repo && docker run -d --name rpm-repo -p 8081:8080 ghcr.io/gemini-rtsw/rpm-repo:latest
+sudo dnf upgrade --refresh --disablerepo='*' --enablerepo='*rpm-repo*' --nogpgcheck tsrs-screen
+sudo systemctl restart tsrs-web
+rpm -q tsrs-screen && docker ps --format '{{.Names}}\t{{.Image}}' | grep tsrs
+```
+
+`--refresh` matters: dnf caches repodata per repo and reuses it even after the
+container behind it changed. Your `/etc/sysconfig/tsrs-web` edits survive
+(`%config(noreplace)`); a changed packaged default arrives as `.rpmnew`.
+
 Port 8081 because the documented 8080 is often taken. The unit is pinned to the
 image tag matching the RPM version, so `rpm -q tsrs-screen` says exactly what
 runs, `dnf upgrade` moves it, and `dnf downgrade` is a real rollback.
