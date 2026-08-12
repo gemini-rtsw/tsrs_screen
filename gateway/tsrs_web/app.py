@@ -48,12 +48,19 @@ class Heartbeat(BaseModel):
     age: float = 0.0
 
 
+# Stamped into the unit by the RPM spec, so the panel shows the package version
+# an operator would see in `rpm -q`. "dev" when run outside the package, e.g.
+# the docker-compose stack.
+VERSION = os.environ.get("TSRS_VERSION", "dev")
+
+
 class Status(BaseModel):
     now: float
     channels: Dict[str, Reading]
     heartbeat: Heartbeat
     connected: int
     total: int
+    version: str = VERSION
 
 
 class Monitor:
@@ -340,7 +347,7 @@ def healthz():
         else s.heartbeat.dict()
     with_values = sum(1 for r in s.channels.values()
                       if r.connected and r.value is not None)
-    return {"ok": True, "backend": monitor.backend,
+    return {"ok": True, "version": VERSION, "backend": monitor.backend,
             "ca_connected": s.connected, "ca_total": s.total,
             "ca_with_values": with_values,
             # Steady state: every channel connected AND carrying a value.

@@ -54,6 +54,7 @@ ExecStart=/usr/bin/docker run --rm --name tsrs-web \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   --env-file /run/tsrs-web.env \
+  -e TSRS_VERSION=@VERSION@ \
   -e TSRS_CA_BACKEND=pyepics \
   -e TSRS_CA_WATCHDOG_S=60 \
   -e TSRS_LOGLEVEL=INFO \

@@ -160,6 +160,8 @@ TEMPLATE = """<!doctype html>
   <span>{subtitle}</span>
   <span class="sep">|</span>
   <span id="stamp"></span>
+  <span class="sep">|</span>
+  <span id="ver"></span>
 </footer>
 <script src="app.js?v={jsver}"></script>
 </body>
@@ -381,6 +383,9 @@ async function tick() {
     allStale(String(err.message || err));
     return;
   }
+
+  const v = document.getElementById('ver');
+  if (data.version && v.textContent !== 'v' + data.version) v.textContent = 'v' + data.version;
 
   const ch = data.channels || {};
   let live = 0, total = 0;

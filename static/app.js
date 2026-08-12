@@ -64,6 +64,9 @@ async function tick() {
     return;
   }
 
+  const v = document.getElementById('ver');
+  if (data.version && v.textContent !== 'v' + data.version) v.textContent = 'v' + data.version;
+
   const ch = data.channels || {};
   let live = 0, total = 0;
 

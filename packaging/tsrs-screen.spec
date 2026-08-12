@@ -8,7 +8,7 @@
 # THE VERSION LIVES HERE. Bump specver in a commit, then run the `release`
 # workflow -- it reads this value, so the RPM version, the image tag and the git
 # tag cannot disagree and nobody types a version twice.
-%global specver 0.4.0
+%global specver 0.5.0
 
 # Commit hash in the Release, as every other gemini-rtsw package does. It makes
 # each build a distinct NVRA, so a dev build can never overwrite a released one
@@ -62,8 +62,9 @@ After installing, set the IOC address in /etc/sysconfig/tsrs-web, then:
 # a human reading the unit can tell at a glance what it runs, and it matches
 # `rpm -q`. The v* git tag drives both, so they cannot disagree.
 sed -e 's|@IMAGE@|%{appimage}:%{version}|' \
+    -e 's|@VERSION@|%{version}-%{release}|' \
     deploy/tsrs-web.service.in > tsrs-web.service
-grep -q '@IMAGE@' tsrs-web.service && { echo "ERROR: @IMAGE@ not substituted" >&2; exit 1; }
+grep -qE '@IMAGE@|@VERSION@' tsrs-web.service && { echo "ERROR: placeholder not substituted" >&2; exit 1; }
 grep -q '^Environment=IMAGE=%{appimage}:%{version}$' tsrs-web.service \
     || { echo "ERROR: image pin missing or malformed" >&2; exit 1; }
 
