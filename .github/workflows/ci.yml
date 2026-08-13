@@ -6,7 +6,7 @@ on:
     branches: [main]
 jobs:
   build:
-    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@lightweight
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/ci.yml@main
     secrets: inherit
     with:
       scripts_dir: gemini-rtsw-ci
@@ -20,5 +20,5 @@ jobs:
   # scratch tags. Without this job the RPM never lands in the served repo.
   publish:
     needs: build
-    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@lightweight
+    uses: gemini-rtsw/gemini-rtsw-ci/.github/workflows/publish.yml@main
     secrets: inherit
